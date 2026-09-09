@@ -6,12 +6,12 @@
 #include <map>
 #include <set>
 #include <mutex>
-#include <chrono>
 #include <string>
 #include <thread>
 
 #include "HostContext.h"
 #include "Log.h"
+#include "Notify.h"
 #include "ProxyBuilder.h"
 #include "ProxyFormat.h"
 #include "ProxyStore.h"
@@ -19,17 +19,33 @@
 
 namespace pe {
 
+ScanResult ApplyProxies();
+ScanResult RestoreOriginals();
+
 namespace {
 
 const wchar_t* kEffect = L"動画ファイル";
 const wchar_t* kItem = L"ファイル";
 std::atomic<bool> g_scanning{false};
-std::atomic<unsigned long long> g_last_scan{0};
-std::atomic<bool> g_requested{false};
+std::atomic<int> g_pending{0};
 std::atomic<bool> g_stop{false};
 std::thread g_worker;
 std::mutex g_wake_lock;
 std::condition_variable g_wake;
+
+enum RequestKind {
+    kRequestAutomatic = 1,
+    kRequestApply = 2,
+    kRequestRestore = 4,
+};
+
+void Post(int kind) {
+    {
+        std::lock_guard<std::mutex> lock(g_wake_lock);
+        g_pending.fetch_or(kind);
+    }
+    g_wake.notify_all();
+}
 
 struct Decision {
     std::wstring proxy;
@@ -128,34 +144,43 @@ bool Eligible(const std::wstring& path, const MEDIA_INFO& info) {
 }
 
 void ScanWorker() {
-    while (!g_stop.load()) {
+    while (true) {
+        int taken = 0;
         {
             std::unique_lock<std::mutex> lock(g_wake_lock);
-            g_wake.wait_for(lock, std::chrono::milliseconds(400));
+            g_wake.wait(lock, [] { return g_stop.load() || g_pending.load() != 0; });
+            if (g_stop.load()) return;
+            taken = g_pending.exchange(0);
         }
-        if (g_stop.load()) return;
-        if (!g_requested.exchange(false)) continue;
-        if (!CurrentSettings().enabled) continue;
-        ScanResult result = ApplyProxies();
-        g_last_scan.store(GetTickCount64());
-        if (result.swapped > 0) {
-            Say(L"自動でプロキシへ差し替えました: %d 件", result.swapped);
+        if (taken & kRequestRestore) {
+            ScanResult result = RestoreOriginals();
+            Say(L"元素材へ戻しました: %d 件", result.restored);
+            PublishStateChange();
+        }
+        if (taken & kRequestApply) {
+            ScanResult result = ApplyProxies();
+            Say(L"プロキシへ差し替えました: 対象 %d 件、差し替え %d 件", result.eligible, result.swapped);
+            PublishStateChange();
+        } else if ((taken & kRequestAutomatic) && CurrentSettings().enabled) {
+            ScanResult result = ApplyProxies();
+            if (result.swapped > 0) {
+                Say(L"自動でプロキシへ差し替えました: %d 件", result.swapped);
+            }
+            PublishStateChange();
         }
     }
 }
 
 void OnHostEvent(void*) {
-    RequestAutomaticScan();
+    Post(kRequestAutomatic);
 }
 
 void OnEditMenuApply(EDIT_SECTION*) {
-    ScanResult result = ApplyProxies();
-    Say(L"プロキシへ差し替えました: 対象 %d 件、差し替え %d 件", result.eligible, result.swapped);
+    Post(kRequestApply);
 }
 
 void OnEditMenuRestore(EDIT_SECTION*) {
-    ScanResult result = RestoreOriginals();
-    Say(L"元素材へ戻しました: %d 件", result.restored);
+    Post(kRequestRestore);
 }
 
 }
@@ -268,10 +293,12 @@ ScanResult RestoreOriginals() {
     return result;
 }
 
-void RequestAutomaticScan() {
-    if (GetTickCount64() - g_last_scan.load() < 1500) return;
-    g_requested.store(true);
-    g_wake.notify_all();
+void RequestApply() {
+    Post(kRequestApply);
+}
+
+void RequestRestore() {
+    Post(kRequestRestore);
 }
 
 void StartScanController() {

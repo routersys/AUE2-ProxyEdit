@@ -8,6 +8,7 @@
 
 #include "HostContext.h"
 #include "Log.h"
+#include "Notify.h"
 #include "ProxyBuilder.h"
 #include "ScanController.h"
 #include "Settings.h"
@@ -17,7 +18,7 @@ namespace pe {
 namespace {
 
 const wchar_t* kClassName = L"ProxyEditStatusPanel";
-const UINT_PTR kTimerId = 0x50450002;
+const UINT kStateMessage = WM_APP + 1;
 
 struct Button {
     RECT area{};
@@ -48,9 +49,6 @@ RECT g_thumb{};
 bool g_tracking = false;
 bool g_dragging = false;
 int g_drag_offset = 0;
-BuilderSummary g_shown;
-bool g_shown_valid = false;
-unsigned long long g_asked = 0;
 
 int Scaled(HWND window, int value) {
     UINT dpi = GetDpiForWindow(window);
@@ -391,49 +389,24 @@ int HitButton(POINT point) {
 
 void RunAction(HWND window, int action) {
     if (action == kActionApply) {
-        ScanResult result = ApplyProxies();
-        Say(L"プロキシへ差し替えました: 対象 %d 件、差し替え %d 件", result.eligible, result.swapped);
+        RequestApply();
     } else if (action == kActionRestore) {
-        ScanResult result = RestoreOriginals();
-        Say(L"元素材へ戻しました: %d 件", result.restored);
+        RequestRestore();
     } else if (action == kActionPause) {
         SetBuilderPaused(!BuilderPaused());
     }
     InvalidateRect(window, nullptr, FALSE);
 }
 
-bool SummaryChanged(const BuilderSummary& summary) {
-    if (!g_shown_valid) return true;
-    return summary.jobs != g_shown.jobs || summary.queued_chunks != g_shown.queued_chunks ||
-           summary.bytes != g_shown.bytes || summary.paused != g_shown.paused ||
-           summary.working != g_shown.working || summary.overall != g_shown.overall;
-}
-
 LRESULT CALLBACK PanelProc(HWND window, UINT message, WPARAM first, LPARAM second) {
     switch (message) {
         case WM_CREATE:
-            SetTimer(window, kTimerId, 250, nullptr);
+            AddStateListener(window, kStateMessage);
             return 0;
-        case WM_TIMER: {
-            if (!IsWindowVisible(window)) return 0;
-            if (g_jobs.empty() && CurrentSettings().enabled) {
-                const unsigned long long now = GetTickCount64();
-                if (now - g_asked >= 4000) {
-                    EDIT_INFO info = EditInfo();
-                    if (info.width > 0 && (info.frame_max > 0 || info.layer_max > 0)) {
-                        g_asked = now;
-                        RequestAutomaticScan();
-                    }
-                }
-            }
-            BuilderSummary summary = BuilderState();
-            if (SummaryChanged(summary)) {
-                g_shown = summary;
-                g_shown_valid = true;
-                InvalidateRect(window, nullptr, FALSE);
-            }
+        case kStateMessage:
+            AcknowledgeStateChange(window);
+            if (IsWindowVisible(window)) InvalidateRect(window, nullptr, FALSE);
             return 0;
-        }
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:
@@ -555,7 +528,7 @@ LRESULT CALLBACK PanelProc(HWND window, UINT message, WPARAM first, LPARAM secon
             return 0;
         }
         case WM_DESTROY:
-            KillTimer(window, kTimerId);
+            RemoveStateListener(window);
             return 0;
         default:
             break;

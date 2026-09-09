@@ -7,17 +7,19 @@
 
 #include "HostContext.h"
 #include "Log.h"
+#include "Notify.h"
 #include "ProxyBuilder.h"
 
 namespace pe {
 
 namespace {
 
-const UINT_PTR kTimerId = 0x50450001;
-const UINT kTimerInterval = 700;
+const wchar_t* kClassName = L"ProxyEditNotifierSink";
+const UINT kStateMessage = WM_APP + 1;
 
 ITaskbarList3* g_taskbar = nullptr;
 HWND g_window = nullptr;
+HWND g_sink = nullptr;
 bool g_showing = false;
 std::atomic<bool> g_finished_reported{true};
 
@@ -66,8 +68,13 @@ void Update() {
     }
 }
 
-void CALLBACK OnTimer(HWND, UINT, UINT_PTR, DWORD) {
-    Update();
+LRESULT CALLBACK SinkProc(HWND window, UINT message, WPARAM first, LPARAM second) {
+    if (message == kStateMessage) {
+        AcknowledgeStateChange(window);
+        Update();
+        return 0;
+    }
+    return DefWindowProcW(window, message, first, second);
 }
 
 }
@@ -75,12 +82,24 @@ void CALLBACK OnTimer(HWND, UINT, UINT_PTR, DWORD) {
 void StartNotifier() {
     g_window = HostWindow();
     if (!g_window) return;
-    SetTimer(g_window, kTimerId, kTimerInterval, OnTimer);
+    WNDCLASSEXW description{};
+    description.cbSize = sizeof(description);
+    description.lpfnWndProc = SinkProc;
+    description.hInstance = ModuleInstance();
+    description.lpszClassName = kClassName;
+    RegisterClassExW(&description);
+    g_sink = CreateWindowExW(0, kClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr,
+                             ModuleInstance(), nullptr);
+    if (g_sink) AddStateListener(g_sink, kStateMessage);
 }
 
 void StopNotifier() {
+    if (g_sink) {
+        RemoveStateListener(g_sink);
+        DestroyWindow(g_sink);
+        g_sink = nullptr;
+    }
     if (g_window) {
-        KillTimer(g_window, kTimerId);
         if (g_taskbar && g_showing) g_taskbar->SetProgressState(g_window, TBPF_NOPROGRESS);
         g_window = nullptr;
     }

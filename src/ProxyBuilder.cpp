@@ -13,6 +13,7 @@
 #include "JpegCodec.h"
 #include "Log.h"
 #include "MediaDecoder.h"
+#include "Notify.h"
 #include "ProxyFormat.h"
 #include "ProxyStore.h"
 #include "Settings.h"
@@ -48,6 +49,15 @@ std::mutex g_wake_lock;
 std::atomic<bool> g_stop{false};
 std::atomic<bool> g_paused{false};
 std::atomic<int> g_active{0};
+std::atomic<unsigned long long> g_generation{0};
+
+void WakeWorkers() {
+    {
+        std::lock_guard<std::mutex> lock(g_wake_lock);
+        g_generation.fetch_add(1);
+    }
+    g_wake.notify_all();
+}
 
 std::wstring Normalized(const std::wstring& path) {
     std::wstring lowered = path;
@@ -104,8 +114,11 @@ bool PickChunk(const JobPointer& job, int& chunk) {
 }
 
 void MarkChunk(const JobPointer& job, int chunk, unsigned char state) {
-    std::lock_guard<std::mutex> lock(job->state_lock);
-    if (chunk >= 0 && chunk < (int)job->chunks.size()) job->chunks[(size_t)chunk] = state;
+    {
+        std::lock_guard<std::mutex> lock(job->state_lock);
+        if (chunk >= 0 && chunk < (int)job->chunks.size()) job->chunks[(size_t)chunk] = state;
+    }
+    PublishStateChange();
 }
 
 bool OpenDecoder(const JobPointer& job) {
@@ -130,6 +143,7 @@ void FailJob(const JobPointer& job, const wchar_t* reason) {
         job->message = reason;
     }
     Warn(L"生成を中止しました: %s (%s)", reason, job->key.path.c_str());
+    PublishStateChange();
 }
 
 void ProcessChunk(const JobPointer& job, int chunk) {
@@ -200,16 +214,19 @@ bool TakeWork(JobPointer& picked, int& chunk) {
 
 void Worker() {
     while (!g_stop.load()) {
+        const unsigned long long seen = g_generation.load();
         if (g_paused.load()) {
             std::unique_lock<std::mutex> lock(g_wake_lock);
-            g_wake.wait_for(lock, std::chrono::milliseconds(400));
+            g_wake.wait(lock, [seen] {
+                return g_stop.load() || !g_paused.load() || g_generation.load() != seen;
+            });
             continue;
         }
         JobPointer job;
         int chunk = -1;
         if (!TakeWork(job, chunk)) {
             std::unique_lock<std::mutex> lock(g_wake_lock);
-            g_wake.wait_for(lock, std::chrono::milliseconds(500));
+            g_wake.wait(lock, [seen] { return g_stop.load() || g_generation.load() != seen; });
             continue;
         }
         g_active.fetch_add(1);
@@ -221,6 +238,8 @@ void Worker() {
         }
         g_active.fetch_sub(1);
         job->work.unlock();
+        WakeWorkers();
+        PublishStateChange();
     }
 }
 
@@ -237,7 +256,7 @@ void StartBuilder() {
 
 void StopBuilder() {
     g_stop.store(true);
-    g_wake.notify_all();
+    WakeWorkers();
     for (std::thread& worker : g_workers) {
         if (worker.joinable()) worker.join();
     }
@@ -317,7 +336,8 @@ bool RegisterSource(const std::wstring& source, std::wstring& proxy_path) {
     }
     proxy_path = job->proxy;
     Say(L"プロキシを登録しました: %s -> %dx%d", source.c_str(), header.proxy_width, header.proxy_height);
-    g_wake.notify_all();
+    WakeWorkers();
+    PublishStateChange();
     return true;
 }
 
@@ -326,7 +346,7 @@ void FocusSource(const std::wstring& source, int frame) {
     auto found = g_jobs.find(Normalized(source));
     if (found == g_jobs.end()) return;
     found->second->focus.store(frame);
-    g_wake.notify_all();
+    WakeWorkers();
 }
 
 void RequestWholeSource(const std::wstring& source) {
@@ -334,7 +354,8 @@ void RequestWholeSource(const std::wstring& source) {
     auto found = g_jobs.find(Normalized(source));
     if (found == g_jobs.end()) return;
     found->second->want_all.store(true);
-    g_wake.notify_all();
+    WakeWorkers();
+    PublishStateChange();
 }
 
 void DiscardSource(const std::wstring& source) {
@@ -350,11 +371,13 @@ void DiscardSource(const std::wstring& source) {
     job->writer.Close();
     job->decoder.Close();
     RemoveProxy(job->proxy);
+    PublishStateChange();
 }
 
 void SetBuilderPaused(bool paused) {
     g_paused.store(paused);
-    g_wake.notify_all();
+    WakeWorkers();
+    PublishStateChange();
 }
 
 bool BuilderPaused() {

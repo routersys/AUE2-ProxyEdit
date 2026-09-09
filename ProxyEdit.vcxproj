@@ -99,6 +99,7 @@
     <ClCompile Include="src\Log.cpp" />
     <ClCompile Include="src\MediaDecoder.cpp" />
     <ClCompile Include="src\Notifier.cpp" />
+    <ClCompile Include="src\Notify.cpp" />
     <ClCompile Include="src\Plugin.cpp" />
     <ClCompile Include="src\ProxyBuilder.cpp" />
     <ClCompile Include="src\ProxyFormat.cpp" />
@@ -118,6 +119,7 @@
     <ClInclude Include="src\Log.h" />
     <ClInclude Include="src\MediaDecoder.h" />
     <ClInclude Include="src\Notifier.h" />
+    <ClInclude Include="src\Notify.h" />
     <ClInclude Include="src\ProxyBuilder.h" />
     <ClInclude Include="src\ProxyFormat.h" />
     <ClInclude Include="src\ProxyInput.h" />
