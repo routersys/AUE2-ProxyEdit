@@ -96,6 +96,7 @@
     <ClCompile Include="src\HostContext.cpp" />
     <ClCompile Include="src\JpegCodec.cpp" />
     <ClCompile Include="src\Log.cpp" />
+    <ClCompile Include="src\MediaDecoder.cpp" />
     <ClCompile Include="src\Plugin.cpp" />
     <ClCompile Include="src\ProxyFormat.cpp" />
     <ClCompile Include="src\Settings.cpp" />
@@ -106,6 +107,7 @@
     <ClInclude Include="src\HostContext.h" />
     <ClInclude Include="src\JpegCodec.h" />
     <ClInclude Include="src\Log.h" />
+    <ClInclude Include="src\MediaDecoder.h" />
     <ClInclude Include="src\ProxyFormat.h" />
     <ClInclude Include="src\Settings.h" />
   </ItemGroup>
