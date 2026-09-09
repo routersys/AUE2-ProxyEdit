@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "FlatButton.h"
 #include "HostContext.h"
 #include "Log.h"
 #include "Notify.h"
@@ -30,6 +31,18 @@ enum ControlId {
     kIdOpenStore,
     kIdClose,
     kIdSummary,
+};
+
+struct ButtonSpec {
+    int id;
+    const wchar_t* label;
+};
+
+const ButtonSpec kLeftButtons[4] = {
+    {kIdRefresh, L"更新"},
+    {kIdDeleteSelected, L"選んだものを削除"},
+    {kIdDeleteOrphans, L"元素材が無いものを削除"},
+    {kIdOpenStore, L"保存先を開く"},
 };
 
 struct Row {
@@ -228,17 +241,17 @@ void Layout(HWND window) {
     SetWindowPos(GetDlgItem(window, kIdSummary), nullptr, margin, summary_top,
                  client.right - margin * 2, line, SWP_NOZORDER);
 
-    const int button_width = Scaled(window, 150);
     const int gap = Scaled(window, 6);
     int x = margin;
-    const int order[4] = {kIdRefresh, kIdDeleteSelected, kIdDeleteOrphans, kIdOpenStore};
-    for (int id : order) {
-        SetWindowPos(GetDlgItem(window, id), nullptr, x, bottom, button_width, button_height,
+    for (const ButtonSpec& spec : kLeftButtons) {
+        const int width = FlatButtonWidth(window, g_font, spec.label);
+        SetWindowPos(GetDlgItem(window, spec.id), nullptr, x, bottom, width, button_height,
                      SWP_NOZORDER);
-        x += button_width + gap;
+        x += width + gap;
     }
-    SetWindowPos(GetDlgItem(window, kIdClose), nullptr, client.right - margin - Scaled(window, 96),
-                 bottom, Scaled(window, 96), button_height, SWP_NOZORDER);
+    const int close_width = FlatButtonWidth(window, g_font, L"閉じる");
+    SetWindowPos(GetDlgItem(window, kIdClose), nullptr, client.right - margin - close_width, bottom,
+                 close_width, button_height, SWP_NOZORDER);
 }
 
 void Build(HWND window) {
@@ -278,19 +291,22 @@ void Build(HWND window) {
     }
 
     const int margin = Scaled(window, 10);
-    RECT wanted{0, 0, margin * 2 + columns_width + GetSystemMetrics(SM_CXVSCROLL) + Scaled(window, 8),
-                Scaled(window, 460)};
+    int buttons_width = margin * 2 + FlatButtonWidth(window, g_font, L"閉じる") + Scaled(window, 24);
+    for (const ButtonSpec& spec : kLeftButtons) {
+        buttons_width += FlatButtonWidth(window, g_font, spec.label) + Scaled(window, 6);
+    }
+    const int list_width =
+        margin * 2 + columns_width + GetSystemMetrics(SM_CXVSCROLL) + Scaled(window, 8);
+    RECT wanted{0, 0, std::max(list_width, buttons_width), Scaled(window, 460)};
     AdjustWindowRectEx(&wanted, (DWORD)GetWindowLongPtrW(window, GWL_STYLE), FALSE, 0);
     SetWindowPos(window, nullptr, 0, 0, wanted.right - wanted.left, wanted.bottom - wanted.top,
                  SWP_NOMOVE | SWP_NOZORDER);
 
     MakeControl(window, L"STATIC", L"", SS_LEFT | SS_ENDELLIPSIS, 0, 0, 10, 10, kIdSummary);
-    MakeControl(window, L"BUTTON", L"更新", BS_PUSHBUTTON, 0, 0, 10, 10, kIdRefresh);
-    MakeControl(window, L"BUTTON", L"選んだものを削除", BS_PUSHBUTTON, 0, 0, 10, 10, kIdDeleteSelected);
-    MakeControl(window, L"BUTTON", L"元素材が無いものを削除", BS_PUSHBUTTON, 0, 0, 10, 10,
-                kIdDeleteOrphans);
-    MakeControl(window, L"BUTTON", L"保存先を開く", BS_PUSHBUTTON, 0, 0, 10, 10, kIdOpenStore);
-    MakeControl(window, L"BUTTON", L"閉じる", BS_PUSHBUTTON, 0, 0, 10, 10, kIdClose);
+    for (const ButtonSpec& spec : kLeftButtons) {
+        MakeFlatButton(window, spec.label, spec.id, g_font, false);
+    }
+    MakeFlatButton(window, L"閉じる", kIdClose, g_font, false);
 
     Layout(window);
     Refresh();
@@ -308,6 +324,9 @@ LRESULT CALLBACK StoreProc(HWND window, UINT message, WPARAM first, LPARAM secon
         case WM_SIZE:
             if (g_list) Layout(window);
             return 0;
+        case WM_DRAWITEM:
+            DrawFlatButton((const DRAWITEMSTRUCT*)second);
+            return TRUE;
         case WM_NOTIFY: {
             LPNMHDR header = (LPNMHDR)second;
             if (header && header->idFrom == kIdList && header->code == LVN_COLUMNCLICK) {

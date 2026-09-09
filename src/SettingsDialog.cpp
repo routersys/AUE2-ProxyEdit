@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "FlatButton.h"
 #include "HostContext.h"
 #include "Log.h"
 #include "ProxyStore.h"
@@ -207,28 +208,35 @@ void Build(HWND window) {
     SetNumber(window, kIdCapacity, (int)(settings.capacity_bytes / (1024LL * 1024 * 1024)));
 
     const int total_width = label_width + edit_width + suffix_width;
-    const int browse_width = Scaled(window, 72);
+    const int browse_width = FlatButtonWidth(window, g_font, L"参照...");
     MakeControl(window, L"STATIC", L"プロキシの保存先", SS_LEFT, margin, y + Scaled(window, 3),
                 total_width, height, 0);
     y += Scaled(window, 20);
     MakeControl(window, L"EDIT", EffectiveStorePath().c_str(), WS_BORDER | ES_AUTOHSCROLL, margin, y,
                 total_width - browse_width - Scaled(window, 6), height, kIdStorePath);
-    MakeControl(window, L"BUTTON", L"参照...", BS_PUSHBUTTON, margin + total_width - browse_width, y,
-                browse_width, height, kIdBrowse);
+    MakeFlatButton(window, L"参照...", kIdBrowse, g_font, false);
+    SetWindowPos(GetDlgItem(window, kIdBrowse), nullptr, margin + total_width - browse_width, y,
+                 browse_width, height, SWP_NOZORDER);
     y += row;
     MakeControl(window, L"STATIC", L"", SS_LEFT | SS_ENDELLIPSIS, margin, y, total_width, height,
                 kIdStoreInfo);
     y += row;
 
-    const int button_width = Scaled(window, 96);
-    const int button_height = Scaled(window, 24);
+    const int button_height = Scaled(window, 26);
     const int total = margin + label_width + edit_width + suffix_width;
-    MakeControl(window, L"BUTTON", L"保存先を管理", BS_PUSHBUTTON, margin, y, button_width,
-                button_height, kIdOpenStore);
-    MakeControl(window, L"BUTTON", L"取消", BS_PUSHBUTTON, total - button_width, y, button_width,
-                button_height, kIdCancel);
-    MakeControl(window, L"BUTTON", L"適用", BS_DEFPUSHBUTTON,
-                total - button_width * 2 - Scaled(window, 6), y, button_width, button_height, kIdAccept);
+    const int manage_width = FlatButtonWidth(window, g_font, L"保存先を管理");
+    const int cancel_width = FlatButtonWidth(window, g_font, L"取消");
+    const int accept_width = FlatButtonWidth(window, g_font, L"適用");
+    MakeFlatButton(window, L"保存先を管理", kIdOpenStore, g_font, false);
+    SetWindowPos(GetDlgItem(window, kIdOpenStore), nullptr, margin, y, manage_width, button_height,
+                 SWP_NOZORDER);
+    MakeFlatButton(window, L"取消", kIdCancel, g_font, false);
+    SetWindowPos(GetDlgItem(window, kIdCancel), nullptr, total - cancel_width, y, cancel_width,
+                 button_height, SWP_NOZORDER);
+    MakeFlatButton(window, L"適用", kIdAccept, g_font, true);
+    SetWindowPos(GetDlgItem(window, kIdAccept), nullptr,
+                 total - cancel_width - accept_width - Scaled(window, 6), y, accept_width,
+                 button_height, SWP_NOZORDER);
     y += button_height + margin;
 
     RECT client{0, 0, total + margin, y};
@@ -285,6 +293,9 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT message, WPARAM first, LPARAM se
             }
             return 0;
         }
+        case WM_DRAWITEM:
+            DrawFlatButton((const DRAWITEMSTRUCT*)second);
+            return TRUE;
         case WM_CLOSE:
             DestroyWindow(window);
             return 0;
