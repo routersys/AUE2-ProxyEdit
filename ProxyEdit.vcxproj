@@ -99,6 +99,7 @@
     <ClCompile Include="src\MediaDecoder.cpp" />
     <ClCompile Include="src\Plugin.cpp" />
     <ClCompile Include="src\ProxyFormat.cpp" />
+    <ClCompile Include="src\ProxyStore.cpp" />
     <ClCompile Include="src\Settings.cpp" />
   </ItemGroup>
 
@@ -109,6 +110,7 @@
     <ClInclude Include="src\Log.h" />
     <ClInclude Include="src\MediaDecoder.h" />
     <ClInclude Include="src\ProxyFormat.h" />
+    <ClInclude Include="src\ProxyStore.h" />
     <ClInclude Include="src\Settings.h" />
   </ItemGroup>
 
