@@ -56,7 +56,7 @@
     <ClCompile>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;_WINDOWS;_USRDLL;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_USRDLL;UNICODE;_UNICODE;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Sync</ExceptionHandling>
       <WarningLevel>Level3</WarningLevel>
@@ -98,6 +98,7 @@
     <ClCompile Include="src\Log.cpp" />
     <ClCompile Include="src\MediaDecoder.cpp" />
     <ClCompile Include="src\Plugin.cpp" />
+    <ClCompile Include="src\ProxyBuilder.cpp" />
     <ClCompile Include="src\ProxyFormat.cpp" />
     <ClCompile Include="src\ProxyStore.cpp" />
     <ClCompile Include="src\Settings.cpp" />
@@ -109,6 +110,7 @@
     <ClInclude Include="src\JpegCodec.h" />
     <ClInclude Include="src\Log.h" />
     <ClInclude Include="src\MediaDecoder.h" />
+    <ClInclude Include="src\ProxyBuilder.h" />
     <ClInclude Include="src\ProxyFormat.h" />
     <ClInclude Include="src\ProxyStore.h" />
     <ClInclude Include="src\Settings.h" />

@@ -228,6 +228,49 @@ void PlanarToYuy2(const unsigned char* luma, int luma_stride, const unsigned cha
     }
 }
 
+void Yuy2ToBgrScaled(const unsigned char* source, int source_width, int source_height,
+                     int source_stride, unsigned char* destination, int width, int height) {
+    if (source_width <= 1 || source_height <= 0 || width <= 0 || height <= 0) return;
+    for (int y = 0; y < height; y++) {
+        int top = (int)((long long)y * source_height / height);
+        int bottom = (int)((long long)(y + 1) * source_height / height);
+        if (bottom <= top) bottom = top + 1;
+        if (bottom > source_height) bottom = source_height;
+        unsigned char* target = destination + (size_t)y * width * 3;
+        for (int x = 0; x < width; x++) {
+            int left = (int)((long long)x * source_width / width);
+            int right = (int)((long long)(x + 1) * source_width / width);
+            if (right <= left) right = left + 1;
+            if (right > source_width) right = source_width;
+            int luma_total = 0, blue_total = 0, red_total = 0, luma_count = 0, chroma_count = 0;
+            for (int row = top; row < bottom; row++) {
+                const unsigned char* line = source + (size_t)row * source_stride;
+                for (int column = left; column < right; column++) {
+                    luma_total += line[column * 2];
+                    luma_count++;
+                    int pair = column & ~1;
+                    blue_total += line[pair * 2 + 1];
+                    red_total += line[pair * 2 + 3];
+                    chroma_count++;
+                }
+            }
+            if (luma_count == 0 || chroma_count == 0) continue;
+            double luma = 1.1644 * ((double)luma_total / luma_count - 16.0);
+            double blue = (double)blue_total / chroma_count - 128.0;
+            double red = (double)red_total / chroma_count - 128.0;
+            double to_red = 1.7927 * red;
+            double to_green = -0.2132 * blue - 0.5329 * red;
+            double to_blue = 2.1124 * blue;
+            auto clamp = [](double value) {
+                return (unsigned char)(value < 0 ? 0 : (value > 255 ? 255 : value));
+            };
+            target[x * 3 + 0] = clamp(luma + to_blue);
+            target[x * 3 + 1] = clamp(luma + to_green);
+            target[x * 3 + 2] = clamp(luma + to_red);
+        }
+    }
+}
+
 void FillBlackYuy2(unsigned char* destination, int width, int height, int stride) {
     for (int y = 0; y < height; y++) {
         unsigned char* target = destination + (size_t)y * stride;

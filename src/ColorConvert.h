@@ -32,6 +32,9 @@ void PlanarToYuy2(const unsigned char* luma, int luma_stride, const unsigned cha
                   int source_width, int source_height, unsigned char* destination, int width,
                   int height, int stride);
 
+void Yuy2ToBgrScaled(const unsigned char* source, int source_width, int source_height,
+                     int source_stride, unsigned char* destination, int width, int height);
+
 void FillBlackYuy2(unsigned char* destination, int width, int height, int stride);
 
 }
