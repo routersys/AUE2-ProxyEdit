@@ -388,6 +388,12 @@ void RequestRestoreProxy(const std::wstring& proxy) {
     Post(kRequestRestoreFailed);
 }
 
+int RestoreProxiesNow(const std::vector<std::wstring>& proxies) {
+    ScanResult result = RestoreFailed(proxies);
+    if (result.restored > 0) PublishStateChange();
+    return result.restored;
+}
+
 std::vector<Unsupported> UnsupportedSources() {
     std::lock_guard<std::mutex> lock(g_report_lock);
     return g_unsupported;

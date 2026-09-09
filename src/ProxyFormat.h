@@ -70,6 +70,7 @@ public:
     const ProxyHeader& Header() const { return header_; }
     bool HasFrame(int frame);
     bool ReadFrame(int frame, std::vector<unsigned char>& out);
+    int ReadyFrames();
 
 private:
     HANDLE file_ = INVALID_HANDLE_VALUE;

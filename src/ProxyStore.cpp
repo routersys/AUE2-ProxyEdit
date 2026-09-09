@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "Log.h"
+#include "ProxyFormat.h"
 #include "Settings.h"
 
 namespace pe {
@@ -94,6 +95,34 @@ std::wstring ProxyPathFor(const SourceKey& key) {
     wchar_t suffix[32];
     _snwprintf_s(suffix, _TRUNCATE, L"_%016llX.pxy", HashPath(key.path));
     return EffectiveStorePath() + L"\\" + BaseName(key.path) + suffix;
+}
+
+std::vector<StoreItem> StoreContents() {
+    std::vector<StoreItem> items;
+    for (const StoreEntry& entry : CollectEntries()) {
+        StoreItem item;
+        item.proxy = entry.path;
+        item.size = entry.size;
+        item.used = entry.used;
+        ProxyReader reader;
+        if (reader.Open(entry.path)) {
+            const ProxyHeader& header = reader.Header();
+            item.readable = true;
+            item.source = header.source_path;
+            item.proxy_width = header.proxy_width;
+            item.proxy_height = header.proxy_height;
+            item.frame_count = header.frame_count;
+            item.ready_frames = reader.ReadyFrames();
+            SourceKey key;
+            if (QuerySource(item.source, key)) {
+                item.source_exists = true;
+                item.source_changed = !SameSource(key, header.source_size, header.source_time);
+            }
+            reader.Close();
+        }
+        items.push_back(std::move(item));
+    }
+    return items;
 }
 
 long long StoreUsage() {

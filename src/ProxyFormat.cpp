@@ -182,6 +182,23 @@ bool ProxyReader::HasFrame(int frame) {
     return entry.size > 0;
 }
 
+int ProxyReader::ReadyFrames() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (file_ == INVALID_HANDLE_VALUE) return 0;
+    const int count = header_.frame_count;
+    if (count <= 0) return 0;
+    std::vector<ProxyIndexEntry> index((size_t)count);
+    if (!ReadAt(file_, ProxyIndexOffset(0), index.data(),
+                (DWORD)(index.size() * sizeof(ProxyIndexEntry)))) {
+        return 0;
+    }
+    int ready = 0;
+    for (const ProxyIndexEntry& entry : index) {
+        if (entry.size > 0) ready++;
+    }
+    return ready;
+}
+
 bool ProxyReader::ReadFrame(int frame, std::vector<unsigned char>& out) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (file_ == INVALID_HANDLE_VALUE) return false;

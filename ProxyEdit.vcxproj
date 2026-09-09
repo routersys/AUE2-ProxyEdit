@@ -110,6 +110,7 @@
     <ClCompile Include="src\Settings.cpp" />
     <ClCompile Include="src\SettingsDialog.cpp" />
     <ClCompile Include="src\StatusPanel.cpp" />
+    <ClCompile Include="src\StoreDialog.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -130,6 +131,7 @@
     <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\SettingsDialog.h" />
     <ClInclude Include="src\StatusPanel.h" />
+    <ClInclude Include="src\StoreDialog.h" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

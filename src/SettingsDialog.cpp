@@ -10,6 +10,7 @@
 #include "Log.h"
 #include "ProxyStore.h"
 #include "Settings.h"
+#include "StoreDialog.h"
 
 namespace pe {
 
@@ -222,8 +223,8 @@ void Build(HWND window) {
     const int button_width = Scaled(window, 96);
     const int button_height = Scaled(window, 24);
     const int total = margin + label_width + edit_width + suffix_width;
-    MakeControl(window, L"BUTTON", L"保存先を開く", BS_PUSHBUTTON, margin, y, button_width, button_height,
-                kIdOpenStore);
+    MakeControl(window, L"BUTTON", L"保存先を管理", BS_PUSHBUTTON, margin, y, button_width,
+                button_height, kIdOpenStore);
     MakeControl(window, L"BUTTON", L"取消", BS_PUSHBUTTON, total - button_width, y, button_width,
                 button_height, kIdCancel);
     MakeControl(window, L"BUTTON", L"適用", BS_DEFPUSHBUTTON,
@@ -280,7 +281,7 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT message, WPARAM first, LPARAM se
                 UpdateStoreInfo(window);
             } else if (id == kIdOpenStore) {
                 EnsureStoreDirectory();
-                ShellExecuteW(window, L"open", EffectiveStorePath().c_str(), nullptr, nullptr, SW_SHOW);
+                OpenStoreDialog(window);
             }
             return 0;
         }
