@@ -39,6 +39,8 @@ std::vector<Button> g_buttons;
 std::vector<JobProgress> g_jobs;
 int g_scroll = 0;
 int g_hover = -1;
+int g_header_height = 0;
+int g_row_pitch = 0;
 
 int Scaled(HWND window, int value) {
     UINT dpi = GetDpiForWindow(window);
@@ -108,6 +110,19 @@ void DrawChunks(HDC dc, const RECT& area, const std::vector<unsigned char>& chun
     }
 }
 
+int TextWidth(HDC dc, const wchar_t* text) {
+    RECT box{0, 0, 0, 0};
+    DrawTextW(dc, text, -1, &box, DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
+    return box.right - box.left;
+}
+
+const wchar_t* WidestThatFits(HDC dc, const wchar_t* const* candidates, int count, int room) {
+    for (int index = 0; index < count; index++) {
+        if (TextWidth(dc, candidates[index]) <= room) return candidates[index];
+    }
+    return candidates[count - 1];
+}
+
 void Paint(HWND window) {
     PAINTSTRUCT paint;
     HDC dc = BeginPaint(window, &paint);
@@ -121,43 +136,87 @@ void Paint(HWND window) {
 
     g_buttons.clear();
     const int padding = Scaled(window, 6);
-    const int header_height = std::max(LayoutSize("SettingItemHeight"), Scaled(window, 26));
+    const int gap = Scaled(window, 4);
+    const int unit = std::max(LayoutSize("SettingItemHeight"), Scaled(window, 26));
     const int line = Scaled(window, 18);
     const int bar = Scaled(window, 8);
     const int row_height = line * 2 + bar + padding;
+    const int available = std::max((int)(client.right - client.left) - padding * 2, Scaled(window, 40));
 
     BuilderSummary summary = BuilderState();
 
-    RECT header{client.left, client.top, client.right, client.top + header_height};
-    FillRectangle(dc, header, ThemeColor("Grouping", RGB(0x38, 0x38, 0x38)));
-
-    const int button_width = Scaled(window, 92);
-    const int button_height = header_height - Scaled(window, 6);
-    int right = client.right - padding;
     struct Definition {
         const wchar_t* text;
         int action;
         bool active;
     };
-    Definition definitions[3] = {
-        {summary.paused ? L"再開" : L"一時停止", kActionPause, summary.paused},
-        {L"元へ戻す", kActionRestore, false},
+    const Definition definitions[3] = {
         {L"プロキシへ", kActionApply, false},
+        {L"元へ戻す", kActionRestore, false},
+        {summary.paused ? L"再開" : L"一時停止", kActionPause, summary.paused},
     };
-    for (const Definition& definition : definitions) {
-        RECT area{right - button_width, header.top + Scaled(window, 3), right,
-                  header.top + Scaled(window, 3) + button_height};
-        DrawButton(dc, area, definition.text, definition.active);
-        g_buttons.push_back({area, definition.action});
-        right = area.left - Scaled(window, 4);
+
+    const int button_height = unit - Scaled(window, 6);
+    int widths[3];
+    int group = gap * 2;
+    for (int index = 0; index < 3; index++) {
+        widths[index] = std::clamp(TextWidth(dc, definitions[index].text) + Scaled(window, 24),
+                                   Scaled(window, 56), available);
+        group += widths[index];
     }
 
-    wchar_t caption[256];
-    _snwprintf_s(caption, _TRUNCATE, L"素材 %d 件   進捗 %.0f%%   容量 %s / %s", summary.jobs,
+    wchar_t full[256];
+    wchar_t middle[128];
+    wchar_t brief[64];
+    _snwprintf_s(full, _TRUNCATE, L"素材 %d 件   進捗 %.0f%%   容量 %s / %s", summary.jobs,
                  summary.overall * 100.0, SizeText(summary.bytes).c_str(),
                  SizeText(summary.capacity).c_str());
-    RECT caption_area{header.left + padding, header.top, right, header.bottom};
-    DrawTextW(dc, caption, -1, &caption_area, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    _snwprintf_s(middle, _TRUNCATE, L"素材 %d 件   進捗 %.0f%%", summary.jobs, summary.overall * 100.0);
+    _snwprintf_s(brief, _TRUNCATE, L"%d 件   %.0f%%", summary.jobs, summary.overall * 100.0);
+    const wchar_t* captions[3] = {full, middle, brief};
+
+    const bool one_row = TextWidth(dc, full) + Scaled(window, 12) + group <= available;
+    const wchar_t* caption = one_row ? full : WidestThatFits(dc, captions, 3, available);
+
+    RECT areas[3];
+    RECT caption_area;
+    int header_bottom;
+    if (one_row) {
+        const int top = client.top + (unit - button_height) / 2;
+        int x = client.right - padding - group;
+        for (int index = 0; index < 3; index++) {
+            areas[index] = {x, top, x + widths[index], top + button_height};
+            x += widths[index] + gap;
+        }
+        header_bottom = client.top + unit;
+        caption_area = {client.left + padding, client.top, areas[0].left - Scaled(window, 12),
+                        header_bottom};
+    } else {
+        int x = client.left + padding;
+        int y = client.top + unit;
+        for (int index = 0; index < 3; index++) {
+            if (x > client.left + padding && x + widths[index] > client.right - padding) {
+                x = client.left + padding;
+                y += button_height + gap;
+            }
+            areas[index] = {x, y, x + widths[index], y + button_height};
+            x += widths[index] + gap;
+        }
+        header_bottom = y + button_height + Scaled(window, 4);
+        caption_area = {client.left + padding, client.top, client.right - padding, client.top + unit};
+    }
+
+    RECT header{client.left, client.top, client.right, header_bottom};
+    FillRectangle(dc, header, ThemeColor("Grouping", RGB(0x38, 0x38, 0x38)));
+    DrawTextW(dc, caption, -1, &caption_area,
+              DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+    for (int index = 0; index < 3; index++) {
+        DrawButton(dc, areas[index], definitions[index].text, definitions[index].active);
+        g_buttons.push_back({areas[index], definitions[index].action});
+    }
+
+    g_header_height = header_bottom - client.top;
+    g_row_pitch = row_height + Scaled(window, 4);
 
     g_jobs = BuilderSnapshot();
     int y = header.bottom + padding - g_scroll;
@@ -175,19 +234,30 @@ void Paint(HWND window) {
             DrawTextW(dc, name.c_str(), -1, &title,
                       DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_PATH_ELLIPSIS | DT_NOPREFIX);
 
-            wchar_t detail[256];
+            RECT detail_area{row.left + padding, title.bottom, row.right - padding, title.bottom + line};
+            const int room = detail_area.right - detail_area.left;
+            wchar_t wide[256];
+            wchar_t compact[160];
+            wchar_t tight[96];
+            const wchar_t* detail = nullptr;
             if (job.failed) {
-                _snwprintf_s(detail, _TRUNCATE, L"%s", job.message.c_str());
+                detail = job.message.c_str();
             } else {
-                _snwprintf_s(detail, _TRUNCATE, L"%dx%d → %dx%d   %d / %d   %.1f fps   %s",
+                _snwprintf_s(wide, _TRUNCATE, L"%dx%d → %dx%d   %d / %d   %.1f fps   %s",
                              job.source_width, job.source_height, job.proxy_width, job.proxy_height,
                              job.ready_chunks, job.total_chunks, job.frames_per_second,
                              SizeText(job.bytes).c_str());
+                _snwprintf_s(compact, _TRUNCATE, L"%dx%d   %d / %d   %s", job.proxy_width,
+                             job.proxy_height, job.ready_chunks, job.total_chunks,
+                             SizeText(job.bytes).c_str());
+                _snwprintf_s(tight, _TRUNCATE, L"%d / %d", job.ready_chunks, job.total_chunks);
+                const wchar_t* details[3] = {wide, compact, tight};
+                detail = WidestThatFits(dc, details, 3, room);
             }
-            RECT detail_area{row.left + padding, title.bottom, row.right - padding, title.bottom + line};
             SetTextColor(dc, job.failed ? RGB(0xFF, 0x90, 0x90)
                                         : ThemeColor("Text", RGB(0xFF, 0xFF, 0xFF)));
-            DrawTextW(dc, detail, -1, &detail_area, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            DrawTextW(dc, detail, -1, &detail_area,
+                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
             SetTextColor(dc, ThemeColor("Text", RGB(0xFF, 0xFF, 0xFF)));
 
             RECT chunk_area{row.left + padding, detail_area.bottom, row.right - padding,
@@ -199,9 +269,9 @@ void Paint(HWND window) {
 
     if (g_jobs.empty()) {
         RECT empty{client.left + padding, header.bottom + padding, client.right - padding,
-                   header.bottom + padding + line * 2};
+                   client.bottom};
         DrawTextW(dc, L"対象の素材がありません。「プロキシへ」を押すと現在のシーンを調べます。", -1, &empty,
-                  DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
+                  DT_LEFT | DT_WORDBREAK | DT_NOPREFIX | DT_EDITCONTROL);
     }
 
     SelectObject(dc, previous);
@@ -209,17 +279,12 @@ void Paint(HWND window) {
 }
 
 int HitRow(HWND window, POINT point) {
-    RECT client;
-    GetClientRect(window, &client);
+    if (g_row_pitch <= 0) return -1;
     const int padding = Scaled(window, 6);
-    const int header_height = std::max(LayoutSize("SettingItemHeight"), Scaled(window, 26));
-    const int line = Scaled(window, 18);
-    const int bar = Scaled(window, 8);
-    const int row_height = line * 2 + bar + padding;
-    if (point.y <= header_height) return -1;
-    int offset = point.y - (header_height + padding) + g_scroll;
+    if (point.y <= g_header_height) return -1;
+    int offset = point.y - (g_header_height + padding) + g_scroll;
     if (offset < 0) return -1;
-    int index = offset / (row_height + Scaled(window, 4));
+    int index = offset / g_row_pitch;
     if (index < 0 || index >= (int)g_jobs.size()) return -1;
     return index;
 }
