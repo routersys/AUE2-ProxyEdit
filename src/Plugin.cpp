@@ -7,6 +7,7 @@
 #include "ProxyBuilder.h"
 #include "ProxyInput.h"
 #include "ScanController.h"
+#include "SettingsDialog.h"
 #include "StatusPanel.h"
 #include "Settings.h"
 
@@ -33,6 +34,7 @@ EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
     StartMediaFoundation();
     host->register_input_plugin(ProxyInputTable());
     RegisterScanMenus(host);
+    RegisterSettingsMenu(host);
     RegisterStatusPanel(host);
     StartScanController();
     StartBuilder();

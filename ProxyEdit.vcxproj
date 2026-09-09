@@ -106,6 +106,7 @@
     <ClCompile Include="src\ProxyStore.cpp" />
     <ClCompile Include="src\ScanController.cpp" />
     <ClCompile Include="src\Settings.cpp" />
+    <ClCompile Include="src\SettingsDialog.cpp" />
     <ClCompile Include="src\StatusPanel.cpp" />
   </ItemGroup>
 
@@ -123,6 +124,7 @@
     <ClInclude Include="src\ProxyStore.h" />
     <ClInclude Include="src\ScanController.h" />
     <ClInclude Include="src\Settings.h" />
+    <ClInclude Include="src\SettingsDialog.h" />
     <ClInclude Include="src\StatusPanel.h" />
   </ItemGroup>
 
