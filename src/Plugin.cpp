@@ -3,6 +3,7 @@
 #include "HostContext.h"
 #include "Log.h"
 #include "MediaDecoder.h"
+#include "ExportGuard.h"
 #include "Notifier.h"
 #include "ProxyBuilder.h"
 #include "ProxyInput.h"
@@ -39,9 +40,11 @@ EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
     StartScanController();
     StartBuilder();
     StartNotifier();
+    StartExportGuard();
 }
 
 EXTERN_C __declspec(dllexport) void UninitializePlugin() {
+    StopExportGuard();
     StopNotifier();
     DestroyStatusPanel();
     StopScanController();

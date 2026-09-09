@@ -67,7 +67,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>user32.lib;gdi32.lib;ole32.lib;shell32.lib;shlwapi.lib;windowscodecs.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;comctl32.lib;gdi32.lib;ole32.lib;shell32.lib;shlwapi.lib;windowscodecs.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
@@ -94,6 +94,7 @@
   <ItemGroup>
     <ClCompile Include="src\AudioDecoder.cpp" />
     <ClCompile Include="src\ColorConvert.cpp" />
+    <ClCompile Include="src\ExportGuard.cpp" />
     <ClCompile Include="src\HostContext.cpp" />
     <ClCompile Include="src\JpegCodec.cpp" />
     <ClCompile Include="src\Log.cpp" />
@@ -114,6 +115,7 @@
   <ItemGroup>
     <ClInclude Include="src\AudioDecoder.h" />
     <ClInclude Include="src\ColorConvert.h" />
+    <ClInclude Include="src\ExportGuard.h" />
     <ClInclude Include="src\HostContext.h" />
     <ClInclude Include="src\JpegCodec.h" />
     <ClInclude Include="src\Log.h" />

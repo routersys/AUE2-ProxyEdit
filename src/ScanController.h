@@ -20,6 +20,11 @@ struct ScanResult {
 void RegisterScanMenus(HOST_APP_TABLE* host);
 void RequestApply();
 void RequestRestore();
+
+int RestoreForExport();
+void ApplyAfterExport();
+void SuspendAutomaticScan(bool suspend);
+bool AutomaticScanSuspended();
 bool IsProxyPath(const std::wstring& path);
 std::wstring SourceOfProxy(const std::wstring& path);
 void StartScanController();

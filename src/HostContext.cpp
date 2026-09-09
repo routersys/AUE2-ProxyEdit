@@ -56,6 +56,12 @@ FONT_INFO* HostFont(const char* key) {
     return g_config->get_font_info(g_config, key);
 }
 
+const wchar_t* LanguageText(const wchar_t* section, const wchar_t* text) {
+    if (!g_config || !g_config->get_language_text) return text;
+    const wchar_t* found = g_config->get_language_text(g_config, section, text);
+    return found ? found : text;
+}
+
 const wchar_t* Translate(const wchar_t* text) {
     if (!g_config) return text;
     const wchar_t* translated = g_config->translate(g_config, text);

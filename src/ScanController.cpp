@@ -11,6 +11,7 @@
 
 #include "HostContext.h"
 #include "Log.h"
+#include "ExportGuard.h"
 #include "Notify.h"
 #include "ProxyBuilder.h"
 #include "ProxyFormat.h"
@@ -27,6 +28,7 @@ namespace {
 const wchar_t* kEffect = L"動画ファイル";
 const wchar_t* kItem = L"ファイル";
 std::atomic<bool> g_scanning{false};
+std::atomic<bool> g_suspended{false};
 std::atomic<int> g_pending{0};
 std::atomic<bool> g_stop{false};
 std::thread g_worker;
@@ -161,7 +163,8 @@ void ScanWorker() {
             ScanResult result = ApplyProxies();
             Say(L"プロキシへ差し替えました: 対象 %d 件、差し替え %d 件", result.eligible, result.swapped);
             PublishStateChange();
-        } else if ((taken & kRequestAutomatic) && CurrentSettings().enabled) {
+        } else if ((taken & kRequestAutomatic) && CurrentSettings().enabled &&
+                   !g_suspended.load()) {
             ScanResult result = ApplyProxies();
             if (result.swapped > 0) {
                 Say(L"自動でプロキシへ差し替えました: %d 件", result.swapped);
@@ -172,6 +175,7 @@ void ScanWorker() {
 }
 
 void OnHostEvent(void*) {
+    NoticeEditActivity();
     Post(kRequestAutomatic);
 }
 
@@ -295,6 +299,27 @@ ScanResult RestoreOriginals() {
 
 void RequestApply() {
     Post(kRequestApply);
+}
+
+int RestoreForExport() {
+    ScanResult result = RestoreOriginals();
+    if (result.restored > 0) Say(L"出力のため元素材へ戻しました: %d 件", result.restored);
+    PublishStateChange();
+    return result.restored;
+}
+
+void ApplyAfterExport() {
+    ScanResult result = ApplyProxies();
+    if (result.swapped > 0) Say(L"出力が終わったのでプロキシへ戻しました: %d 件", result.swapped);
+    PublishStateChange();
+}
+
+void SuspendAutomaticScan(bool suspend) {
+    g_suspended.store(suspend);
+}
+
+bool AutomaticScanSuspended() {
+    return g_suspended.load();
 }
 
 void RequestRestore() {
