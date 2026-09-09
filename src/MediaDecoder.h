@@ -8,8 +8,6 @@
 #include <vector>
 
 struct IMFSourceReader;
-struct IMFDXGIDeviceManager;
-struct ID3D11Device;
 
 namespace pe {
 
@@ -19,7 +17,7 @@ void StopMediaFoundation();
 class MediaDecoder {
 public:
     ~MediaDecoder();
-    bool Open(const std::wstring& path, bool hardware);
+    bool Open(const std::wstring& path);
     void Close();
     bool IsOpen() const;
 
@@ -37,9 +35,6 @@ private:
     long long FrameToTime(long long index) const;
 
     IMFSourceReader* reader_ = nullptr;
-    IMFDXGIDeviceManager* manager_ = nullptr;
-    ID3D11Device* device_ = nullptr;
-    unsigned token_ = 0;
     int width_ = 0;
     int height_ = 0;
     int rate_ = 0;

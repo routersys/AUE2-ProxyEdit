@@ -126,7 +126,7 @@ int EffectiveWorkerCount() {
     unsigned hardware = std::thread::hardware_concurrency();
     if (hardware == 0) hardware = 4;
     int count = (int)(hardware / 2);
-    return std::clamp(count, 1, 8);
+    return std::clamp(count, 1, 4);
 }
 
 int ReadAheadFrames(int width, int height) {
@@ -134,7 +134,7 @@ int ReadAheadFrames(int width, int height) {
     long long bytes = (long long)width * height * 2;
     if (bytes <= 0) return 4;
     int frames = (int)(CurrentSettings().read_ahead_bytes / bytes);
-    return std::clamp(frames, 2, 24);
+    return std::clamp(frames, 2, 8);
 }
 
 }

@@ -110,16 +110,26 @@ void MarkChunk(const JobPointer& job, int chunk, unsigned char state) {
 
 bool OpenDecoder(const JobPointer& job) {
     if (job->opened.load()) return true;
-    if (!job->decoder.Open(job->key.path, true)) {
-        if (!job->decoder.Open(job->key.path, false)) {
-            job->failed.store(true);
+    if (!job->decoder.Open(job->key.path)) {
+        job->failed.store(true);
+        {
             std::lock_guard<std::mutex> lock(job->state_lock);
             job->message = L"この形式は Media Foundation で読み込めません";
-            return false;
         }
+        Warn(L"元素材を開けませんでした: %s", job->key.path.c_str());
+        return false;
     }
     job->opened.store(true);
     return true;
+}
+
+void FailJob(const JobPointer& job, const wchar_t* reason) {
+    job->failed.store(true);
+    {
+        std::lock_guard<std::mutex> lock(job->state_lock);
+        job->message = reason;
+    }
+    Warn(L"生成を中止しました: %s (%s)", reason, job->key.path.c_str());
 }
 
 void ProcessChunk(const JobPointer& job, int chunk) {
@@ -136,24 +146,18 @@ void ProcessChunk(const JobPointer& job, int chunk) {
     for (int frame = begin; frame < end && !g_stop.load(); frame++) {
         if (job->writer.HasFrame(frame)) continue;
         if (!job->decoder.ReadFrameYuy2(frame, picture.data(), stride, header.source_height)) {
-            job->failed.store(true);
-            std::lock_guard<std::mutex> lock(job->state_lock);
-            job->message = L"復号できないフレームがありました";
+            FailJob(job, L"復号できないフレームがありました");
             break;
         }
         Yuy2ToBgrScaled(picture.data(), header.source_width, header.source_height, stride, reduced.data(),
                         header.proxy_width, header.proxy_height);
         if (!EncodeJpeg(reduced.data(), header.proxy_width, header.proxy_height, header.proxy_width,
                         header.proxy_height, header.quality, encoded)) {
-            job->failed.store(true);
-            std::lock_guard<std::mutex> lock(job->state_lock);
-            job->message = L"プロキシの符号化に失敗しました";
+            FailJob(job, L"プロキシの符号化に失敗しました");
             break;
         }
         if (!job->writer.WriteFrame(frame, encoded.data(), (int)encoded.size())) {
-            job->failed.store(true);
-            std::lock_guard<std::mutex> lock(job->state_lock);
-            job->message = L"プロキシを書き込めませんでした";
+            FailJob(job, L"プロキシを書き込めませんでした");
             break;
         }
         produced++;
@@ -260,7 +264,7 @@ bool RegisterSource(const std::wstring& source, std::wstring& proxy_path) {
     job->proxy = ProxyPathFor(key);
 
     MediaDecoder probe;
-    if (!probe.Open(source, true) && !probe.Open(source, false)) return false;
+    if (!probe.Open(source)) return false;
     const Settings& settings = CurrentSettings();
     int proxy_width = probe.Width() * settings.scale_percent / 100;
     int proxy_height = probe.Height() * settings.scale_percent / 100;

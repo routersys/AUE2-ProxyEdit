@@ -14,7 +14,7 @@ struct Settings {
     int scale_percent = 50;
     int quality = 80;
     int chunk_frames = 240;
-    int read_ahead_bytes = 96 * 1024 * 1024;
+    int read_ahead_bytes = 48 * 1024 * 1024;
     int worker_count = 0;
     long long capacity_bytes = 20LL * 1024 * 1024 * 1024;
     std::wstring store_path;

@@ -75,7 +75,7 @@ bool DecodeOriginalFrame(Session* session, int frame, unsigned char* destination
     if (session->original_failed.load()) return false;
     std::lock_guard<std::mutex> lock(session->original_lock);
     if (!session->original_ready.load()) {
-        if (!session->original.Open(session->header.source_path, false)) {
+        if (!session->original.Open(session->header.source_path)) {
             session->original_failed.store(true);
             Warn(L"元素材を読み込めませんでした: %s", session->header.source_path);
             return false;

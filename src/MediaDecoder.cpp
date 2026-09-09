@@ -1,6 +1,5 @@
 #include "MediaDecoder.h"
 
-#include <d3d11.h>
 #include <mfapi.h>
 #include <mferror.h>
 #include <mfidl.h>
@@ -79,34 +78,14 @@ MediaDecoder::~MediaDecoder() {
     Close();
 }
 
-bool MediaDecoder::Open(const std::wstring& path, bool hardware) {
+bool MediaDecoder::Open(const std::wstring& path) {
     Close();
     if (!StartMediaFoundation()) return false;
     std::lock_guard<std::mutex> lock(mutex_);
-    if (hardware) {
-        UINT flags = D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-        if (SUCCEEDED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0,
-                                        D3D11_SDK_VERSION, &device_, nullptr, nullptr)) &&
-            device_) {
-            ID3D10Multithread* threading = nullptr;
-            if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&threading)))) {
-                threading->SetMultithreadProtected(TRUE);
-                threading->Release();
-            }
-            if (FAILED(MFCreateDXGIDeviceManager(&token_, &manager_)) ||
-                FAILED(manager_->ResetDevice(device_, token_))) {
-                if (manager_) {
-                    manager_->Release();
-                    manager_ = nullptr;
-                }
-            }
-        }
-    }
     IMFAttributes* attributes = nullptr;
     if (FAILED(MFCreateAttributes(&attributes, 4))) return false;
     attributes->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);
-    attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, hardware ? TRUE : FALSE);
-    if (manager_) attributes->SetUnknown(MF_SOURCE_READER_D3D_MANAGER, manager_);
+    attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, FALSE);
     HRESULT result = MFCreateSourceReaderFromURL(path.c_str(), attributes, &reader_);
     attributes->Release();
     if (FAILED(result) || !reader_) return false;
@@ -166,14 +145,6 @@ void MediaDecoder::Close() {
     if (reader_) {
         reader_->Release();
         reader_ = nullptr;
-    }
-    if (manager_) {
-        manager_->Release();
-        manager_ = nullptr;
-    }
-    if (device_) {
-        device_->Release();
-        device_ = nullptr;
     }
     next_index_ = -1;
 }
