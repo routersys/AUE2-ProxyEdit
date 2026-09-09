@@ -5,6 +5,7 @@
 #include "MediaDecoder.h"
 #include "ProxyBuilder.h"
 #include "ProxyInput.h"
+#include "ScanController.h"
 #include "Settings.h"
 
 using namespace pe;
@@ -29,10 +30,13 @@ EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
     LoadSettings();
     StartMediaFoundation();
     host->register_input_plugin(ProxyInputTable());
+    RegisterScanMenus(host);
+    StartScanController();
     StartBuilder();
 }
 
 EXTERN_C __declspec(dllexport) void UninitializePlugin() {
+    StopScanController();
     StopBuilder();
     ShutdownProxyInput();
     StopMediaFoundation();

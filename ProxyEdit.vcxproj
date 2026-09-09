@@ -103,6 +103,7 @@
     <ClCompile Include="src\ProxyFormat.cpp" />
     <ClCompile Include="src\ProxyInput.cpp" />
     <ClCompile Include="src\ProxyStore.cpp" />
+    <ClCompile Include="src\ScanController.cpp" />
     <ClCompile Include="src\Settings.cpp" />
   </ItemGroup>
 
@@ -117,6 +118,7 @@
     <ClInclude Include="src\ProxyFormat.h" />
     <ClInclude Include="src\ProxyInput.h" />
     <ClInclude Include="src\ProxyStore.h" />
+    <ClInclude Include="src\ScanController.h" />
     <ClInclude Include="src\Settings.h" />
   </ItemGroup>
 
