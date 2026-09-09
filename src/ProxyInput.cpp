@@ -11,6 +11,7 @@
 #include <thread>
 #include <vector>
 
+#include "AudioDecoder.h"
 #include "ColorConvert.h"
 #include "HostContext.h"
 #include "JpegCodec.h"
@@ -43,6 +44,10 @@ struct Session {
     std::mutex original_lock;
     std::atomic<bool> original_ready{false};
     std::atomic<bool> original_failed{false};
+
+    AudioDecoder audio;
+    WAVEFORMATEX audio_format{};
+    bool has_audio = false;
 
     std::mutex cache_lock;
     std::condition_variable wake;
@@ -132,6 +137,7 @@ INPUT_HANDLE OnOpen(LPCWSTR file) {
     session->stride = session->header.source_width * 2;
     session->bytes = (size_t)session->stride * session->header.source_height;
     session->ahead = ReadAheadFrames(session->header.source_width, session->header.source_height);
+    session->has_audio = session->audio.Open(session->header.source_path);
     int count = std::clamp(EffectiveWorkerCount() / 2, 1, 3);
     for (int index = 0; index < count; index++) {
         session->workers.emplace_back(SessionWorker, session);
@@ -153,6 +159,7 @@ bool OnClose(INPUT_HANDLE handle) {
     }
     session->reader.Close();
     session->original.Close();
+    session->audio.Close();
     delete session;
     g_sessions.fetch_sub(1);
     return true;
@@ -177,6 +184,21 @@ bool OnInfoGet(INPUT_HANDLE handle, INPUT_INFO* info) {
     info->audio_n = 0;
     info->audio_format = nullptr;
     info->audio_format_size = 0;
+    if (session->has_audio) {
+        session->audio_format.wFormatTag = WAVE_FORMAT_PCM;
+        session->audio_format.nChannels = (WORD)session->audio.Channels();
+        session->audio_format.nSamplesPerSec = (DWORD)session->audio.SampleRate();
+        session->audio_format.wBitsPerSample = 16;
+        session->audio_format.nBlockAlign =
+            (WORD)(session->audio_format.nChannels * session->audio_format.wBitsPerSample / 8);
+        session->audio_format.nAvgBytesPerSec =
+            session->audio_format.nSamplesPerSec * session->audio_format.nBlockAlign;
+        session->audio_format.cbSize = 0;
+        info->flag |= INPUT_INFO::FLAG_AUDIO;
+        info->audio_n = (int)session->audio.SampleCount();
+        info->audio_format = &session->audio_format;
+        info->audio_format_size = sizeof(WAVEFORMATEX);
+    }
     return true;
 }
 
@@ -228,12 +250,15 @@ int OnReadVideo(INPUT_HANDLE handle, int frame, void* buffer) {
     return (int)session->bytes;
 }
 
-int OnReadAudio(INPUT_HANDLE, int, int, void*) {
-    return 0;
+int OnReadAudio(INPUT_HANDLE handle, int start, int length, void* buffer) {
+    Session* session = (Session*)handle;
+    if (!session || !buffer || !session->has_audio) return 0;
+    return session->audio.Read(start, length, buffer);
 }
 
 INPUT_PLUGIN_TABLE g_table = {
-    INPUT_PLUGIN_TABLE::FLAG_VIDEO | INPUT_PLUGIN_TABLE::FLAG_CONCURRENT,
+    INPUT_PLUGIN_TABLE::FLAG_VIDEO | INPUT_PLUGIN_TABLE::FLAG_AUDIO |
+        INPUT_PLUGIN_TABLE::FLAG_CONCURRENT,
     L"プロキシ編集",
     L"プロキシ編集 (*.pxy)\0*.pxy\0",
     L"プロキシ編集 version 1.0.0",

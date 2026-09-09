@@ -92,6 +92,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClCompile Include="src\AudioDecoder.cpp" />
     <ClCompile Include="src\ColorConvert.cpp" />
     <ClCompile Include="src\HostContext.cpp" />
     <ClCompile Include="src\JpegCodec.cpp" />
@@ -106,6 +107,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ClInclude Include="src\AudioDecoder.h" />
     <ClInclude Include="src\ColorConvert.h" />
     <ClInclude Include="src\HostContext.h" />
     <ClInclude Include="src\JpegCodec.h" />
