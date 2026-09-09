@@ -280,6 +280,7 @@ bool RegisterSource(const std::wstring& source, std::wstring& proxy_path) {
     header.chunk_frames = settings.chunk_frames;
     header.source_size = key.size;
     header.source_time = key.time;
+    wcsncpy_s(header.source_path, key.path.c_str(), _TRUNCATE);
     probe.Close();
 
     EnsureStoreDirectory();
@@ -287,6 +288,7 @@ bool RegisterSource(const std::wstring& source, std::wstring& proxy_path) {
     if (job->writer.OpenExisting(job->proxy)) {
         const ProxyHeader& existing = job->writer.Header();
         if (SameSource(key, existing.source_size, existing.source_time) &&
+            _wcsicmp(existing.source_path, key.path.c_str()) == 0 &&
             existing.proxy_width == header.proxy_width && existing.proxy_height == header.proxy_height &&
             existing.frame_count == header.frame_count && existing.quality == header.quality &&
             existing.chunk_frames == header.chunk_frames) {

@@ -26,6 +26,7 @@ struct ProxyHeader {
     int64_t source_time;
     int64_t data_offset;
     int32_t reserved[14];
+    wchar_t source_path[1024];
 };
 
 struct ProxyIndexEntry {

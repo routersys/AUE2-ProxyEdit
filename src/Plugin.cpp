@@ -2,6 +2,10 @@
 
 #include "HostContext.h"
 #include "Log.h"
+#include "MediaDecoder.h"
+#include "ProxyBuilder.h"
+#include "ProxyInput.h"
+#include "Settings.h"
 
 using namespace pe;
 
@@ -22,9 +26,16 @@ EXTERN_C __declspec(dllexport) bool InitializePlugin(DWORD) { return true; }
 EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
     SetEditHandle(host->create_edit_handle());
     SetHostWindow(Edit()->get_host_app_window());
+    LoadSettings();
+    StartMediaFoundation();
+    host->register_input_plugin(ProxyInputTable());
+    StartBuilder();
 }
 
 EXTERN_C __declspec(dllexport) void UninitializePlugin() {
+    StopBuilder();
+    ShutdownProxyInput();
+    StopMediaFoundation();
 }
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {

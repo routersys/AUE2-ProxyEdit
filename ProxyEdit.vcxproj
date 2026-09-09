@@ -100,6 +100,7 @@
     <ClCompile Include="src\Plugin.cpp" />
     <ClCompile Include="src\ProxyBuilder.cpp" />
     <ClCompile Include="src\ProxyFormat.cpp" />
+    <ClCompile Include="src\ProxyInput.cpp" />
     <ClCompile Include="src\ProxyStore.cpp" />
     <ClCompile Include="src\Settings.cpp" />
   </ItemGroup>
@@ -112,6 +113,7 @@
     <ClInclude Include="src\MediaDecoder.h" />
     <ClInclude Include="src\ProxyBuilder.h" />
     <ClInclude Include="src\ProxyFormat.h" />
+    <ClInclude Include="src\ProxyInput.h" />
     <ClInclude Include="src\ProxyStore.h" />
     <ClInclude Include="src\Settings.h" />
   </ItemGroup>
