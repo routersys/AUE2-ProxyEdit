@@ -18,9 +18,14 @@ bool g_loaded = false;
 
 const wchar_t* kSection = L"ProxyEdit";
 
+std::wstring Trimmed(std::wstring path) {
+    while (!path.empty() && (path.back() == L'\\' || path.back() == L'/')) path.pop_back();
+    return path;
+}
+
 std::wstring AppDataPath() {
     CONFIG_HANDLE* config = Config();
-    if (config && config->app_data_path) return std::wstring(config->app_data_path);
+    if (config && config->app_data_path) return Trimmed(config->app_data_path);
     wchar_t buffer[MAX_PATH];
     if (SHGetSpecialFolderPathW(nullptr, buffer, CSIDL_COMMON_APPDATA, FALSE)) {
         std::wstring path(buffer);
@@ -116,7 +121,7 @@ std::wstring DefaultStorePath() {
 
 std::wstring EffectiveStorePath() {
     const Settings& settings = CurrentSettings();
-    if (!settings.store_path.empty()) return settings.store_path;
+    if (!settings.store_path.empty()) return Trimmed(settings.store_path);
     return DefaultStorePath();
 }
 
