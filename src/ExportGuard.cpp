@@ -90,8 +90,10 @@ LRESULT CALLBACK GuardProc(HWND window, UINT message, WPARAM first, LPARAM secon
             if (g_passthrough.load() == id) {
                 g_passthrough.store(0);
                 LRESULT result = DefSubclassProc(window, message, first, second);
-                SuspendAutomaticScan(false);
-                if (g_restored.exchange(false)) RequestApply();
+                if (EditState() == EDIT_HANDLE::EDIT_STATE_EDIT) {
+                    SuspendAutomaticScan(false);
+                    if (g_restored.exchange(false)) RequestApply();
+                }
                 return result;
             }
             if (g_waiting.load() != 0) return 0;
