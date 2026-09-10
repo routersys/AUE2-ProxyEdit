@@ -47,7 +47,7 @@ const Field kFields[] = {
     {kIdMinWidth, L"対象にする最小の横幅", L"画素"},
     {kIdMinMbps, L"対象にする最小のビットレート", L"Mbps"},
     {kIdScale, L"プロキシの解像度比率", L"%"},
-    {kIdQuality, L"プロキシの画質", L"1-98"},
+    {kIdQuality, L"プロキシの画質", L"30-98"},
     {kIdChunk, L"まとめて作る長さ", L"フレーム"},
     {kIdReadAhead, L"先読みに使う量", L"MB"},
     {kIdWorkers, L"生成の並列数", L"0で自動"},
