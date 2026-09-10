@@ -1,5 +1,7 @@
 #include "FlatButton.h"
 
+#include <commctrl.h>
+
 #include <algorithm>
 
 #include "HostContext.h"
@@ -7,6 +9,18 @@
 namespace pe {
 
 namespace {
+
+const wchar_t* kProp = L"ProxyEditFlatButton";
+const UINT_PTR kSubclassId = 0x50450004;
+
+struct State {
+    bool primary = false;
+    bool hot = false;
+};
+
+State* StateOf(HWND button) {
+    return (State*)GetPropW(button, kProp);
+}
 
 int Scaled(HWND window, int value) {
     UINT dpi = GetDpiForWindow(window);
@@ -26,6 +40,36 @@ void FrameRectangle(HDC dc, const RECT& area, COLORREF color) {
     DeleteObject(brush);
 }
 
+LRESULT CALLBACK ButtonProc(HWND window, UINT message, WPARAM first, LPARAM second, UINT_PTR,
+                            DWORD_PTR) {
+    State* state = StateOf(window);
+    switch (message) {
+        case WM_MOUSEMOVE:
+            if (state && !state->hot) {
+                state->hot = true;
+                TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, window, 0};
+                TrackMouseEvent(&track);
+                InvalidateRect(window, nullptr, FALSE);
+            }
+            break;
+        case WM_MOUSELEAVE:
+            if (state && state->hot) {
+                state->hot = false;
+                InvalidateRect(window, nullptr, FALSE);
+            }
+            break;
+        case WM_NCDESTROY: {
+            State* dying = (State*)RemovePropW(window, kProp);
+            RemoveWindowSubclass(window, ButtonProc, kSubclassId);
+            delete dying;
+            break;
+        }
+        default:
+            break;
+    }
+    return DefSubclassProc(window, message, first, second);
+}
+
 }
 
 int FlatButtonWidth(HWND parent, HFONT font, const wchar_t* text) {
@@ -40,11 +84,15 @@ int FlatButtonWidth(HWND parent, HFONT font, const wchar_t* text) {
 }
 
 HWND MakeFlatButton(HWND parent, const wchar_t* text, int id, HFONT font, bool defaulted) {
-    DWORD style = WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
-    if (defaulted) style |= BS_DEFPUSHBUTTON;
-    HWND button = CreateWindowExW(0, L"BUTTON", text, style, 0, 0, 10, 10, parent,
-                                  (HMENU)(INT_PTR)id, ModuleInstance(), nullptr);
-    if (button && font) SendMessageW(button, WM_SETFONT, (WPARAM)font, TRUE);
+    HWND button = CreateWindowExW(0, L"BUTTON", text,
+                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 10, 10,
+                                  parent, (HMENU)(INT_PTR)id, ModuleInstance(), nullptr);
+    if (!button) return nullptr;
+    if (font) SendMessageW(button, WM_SETFONT, (WPARAM)font, TRUE);
+    State* state = new State();
+    state->primary = defaulted;
+    SetPropW(button, kProp, (HANDLE)state);
+    SetWindowSubclass(button, ButtonProc, kSubclassId, 0);
     return button;
 }
 
@@ -52,14 +100,14 @@ void DrawFlatButton(const DRAWITEMSTRUCT* item) {
     if (!item || item->CtlType != ODT_BUTTON) return;
     HDC dc = item->hDC;
     const RECT area = item->rcItem;
+    const State* state = StateOf(item->hwndItem);
     const bool pressed = (item->itemState & ODS_SELECTED) != 0;
-    const bool hot = (item->itemState & ODS_HOTLIGHT) != 0;
     const bool disabled = (item->itemState & ODS_DISABLED) != 0;
-    const LONG_PTR style = GetWindowLongPtrW(item->hwndItem, GWL_STYLE);
-    const bool primary = (style & BS_DEFPUSHBUTTON) == BS_DEFPUSHBUTTON;
-    const bool accent = primary || (item->itemState & (ODS_DEFAULT | ODS_FOCUS)) != 0;
+    const bool focused = (item->itemState & ODS_FOCUS) != 0;
+    const bool hot = state && state->hot;
+    const bool primary = state && state->primary;
 
-    COLORREF body = accent && !disabled ? RGB(0xE8, 0xF2, 0xFC) : GetSysColor(COLOR_BTNFACE);
+    COLORREF body = primary && !disabled ? RGB(0xE8, 0xF2, 0xFC) : GetSysColor(COLOR_BTNFACE);
     if (disabled) {
         body = RGB(0xF5, 0xF5, 0xF5);
     } else if (pressed) {
@@ -74,7 +122,7 @@ void DrawFlatButton(const DRAWITEMSTRUCT* item) {
         border = RGB(0xD0, 0xD0, 0xD0);
     } else if (pressed) {
         border = RGB(0x00, 0x5A, 0x9E);
-    } else if (hot || accent) {
+    } else if (hot || primary || focused) {
         border = RGB(0x00, 0x78, 0xD4);
     }
     FrameRectangle(dc, area, border);
