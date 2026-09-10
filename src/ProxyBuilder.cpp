@@ -16,6 +16,7 @@
 #include "Notify.h"
 #include "ProxyFormat.h"
 #include "ProxyStore.h"
+#include "ScanController.h"
 #include "Settings.h"
 
 namespace pe {
@@ -143,6 +144,7 @@ void FailJob(const JobPointer& job, const wchar_t* reason) {
         job->message = reason;
     }
     Warn(L"生成を中止しました: %s (%s)", reason, job->key.path.c_str());
+    RequestRestoreProxy(job->proxy);
     PublishStateChange();
 }
 

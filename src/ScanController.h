@@ -28,6 +28,7 @@ void RequestApply();
 void RequestRestore();
 
 int RestoreForExport();
+void RequestRestoreProxy(const std::wstring& proxy);
 std::vector<Unsupported> UnsupportedSources();
 void ApplyAfterExport();
 void SuspendAutomaticScan(bool suspend);

@@ -22,6 +22,7 @@ namespace pe {
 
 ScanResult ApplyProxies();
 ScanResult RestoreOriginals();
+ScanResult RestoreFailed(const std::vector<std::wstring>& proxies);
 
 namespace {
 
@@ -39,9 +40,11 @@ enum RequestKind {
     kRequestAutomatic = 1,
     kRequestApply = 2,
     kRequestRestore = 4,
+    kRequestRestoreFailed = 8,
 };
 
 std::mutex g_report_lock;
+std::vector<std::wstring> g_failed_proxies;
 std::vector<Unsupported> g_unsupported;
 
 void Post(int kind) {
@@ -156,6 +159,18 @@ void ScanWorker() {
             g_wake.wait(lock, [] { return g_stop.load() || g_pending.load() != 0; });
             if (g_stop.load()) return;
             taken = g_pending.exchange(0);
+        }
+        if (taken & kRequestRestoreFailed) {
+            std::vector<std::wstring> proxies;
+            {
+                std::lock_guard<std::mutex> lock(g_report_lock);
+                proxies.swap(g_failed_proxies);
+            }
+            ScanResult result = RestoreFailed(proxies);
+            if (result.restored > 0) {
+                Say(L"生成に失敗したので元素材へ戻しました: %d 件", result.restored);
+            }
+            PublishStateChange();
         }
         if (taken & kRequestRestore) {
             ScanResult result = RestoreOriginals();
@@ -322,8 +337,55 @@ ScanResult RestoreOriginals() {
     return result;
 }
 
+ScanResult RestoreFailed(const std::vector<std::wstring>& proxies) {
+    ScanResult result;
+    if (proxies.empty()) return result;
+    Collected collected;
+    collected.layers = std::max(EditInfo().layer_max + 1, 1);
+    CallReadSection(&collected, CollectObjects);
+
+    SwapRequest request;
+    std::map<std::wstring, std::wstring> resolved;
+    for (size_t index = 0; index < collected.objects.size(); index++) {
+        const std::wstring& path = collected.files[index];
+        if (!IsProxyPath(path)) continue;
+        bool wanted = false;
+        for (const std::wstring& proxy : proxies) {
+            if (_wcsicmp(proxy.c_str(), path.c_str()) == 0) {
+                wanted = true;
+                break;
+            }
+        }
+        if (!wanted) continue;
+        auto cached = resolved.find(path);
+        if (cached == resolved.end()) {
+            resolved[path] = SourceOfProxy(path);
+            cached = resolved.find(path);
+        }
+        if (cached->second.empty()) continue;
+        request.objects.push_back(collected.objects[index]);
+        request.files.push_back(cached->second);
+    }
+    if (!request.objects.empty()) {
+        CallEditSection(&request, ApplySwap);
+        result.restored = request.applied;
+    }
+    return result;
+}
+
 void RequestApply() {
     Post(kRequestApply);
+}
+
+void RequestRestoreProxy(const std::wstring& proxy) {
+    {
+        std::lock_guard<std::mutex> lock(g_report_lock);
+        for (const std::wstring& known : g_failed_proxies) {
+            if (_wcsicmp(known.c_str(), proxy.c_str()) == 0) return;
+        }
+        g_failed_proxies.push_back(proxy);
+    }
+    Post(kRequestRestoreFailed);
 }
 
 std::vector<Unsupported> UnsupportedSources() {
