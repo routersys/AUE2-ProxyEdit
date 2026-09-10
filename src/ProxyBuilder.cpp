@@ -267,8 +267,15 @@ void StopBuilder() {
         if (worker.joinable()) worker.join();
     }
     g_workers.clear();
-    std::lock_guard<std::mutex> lock(g_registry);
-    g_jobs.clear();
+    std::map<std::wstring, JobPointer> jobs;
+    {
+        std::lock_guard<std::mutex> lock(g_registry);
+        jobs.swap(g_jobs);
+    }
+    for (auto& entry : jobs) {
+        entry.second->writer.Close();
+        entry.second->decoder.Close();
+    }
 }
 
 bool RegisterSource(const std::wstring& source, std::wstring& proxy_path) {
