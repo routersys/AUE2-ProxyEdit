@@ -64,7 +64,7 @@ void Update() {
         g_showing = false;
     }
     if (!g_finished_reported.exchange(true) && summary.jobs > 0) {
-        Say(L"プロキシの生成が一巡しました");
+        Say(L"プロキシの生成が終わりました");
     }
 }
 
