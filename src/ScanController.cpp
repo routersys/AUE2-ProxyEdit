@@ -4,6 +4,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <map>
+#include <set>
 #include <mutex>
 #include <chrono>
 #include <string>
@@ -174,10 +175,19 @@ ScanResult ApplyProxies() {
 
     SwapRequest request;
     std::map<std::wstring, std::wstring> resolved;
+    std::set<std::wstring> already;
     for (size_t index = 0; index < collected.objects.size(); index++) {
         const std::wstring& path = collected.files[index];
         result.examined++;
-        if (IsProxyPath(path)) continue;
+        if (IsProxyPath(path)) {
+            if (already.insert(path).second) {
+                std::wstring source = SourceOfProxy(path);
+                std::wstring proxy;
+                if (!source.empty()) RegisterSource(source, proxy);
+            }
+            result.eligible++;
+            continue;
+        }
 
         auto cached = resolved.find(path);
         if (cached == resolved.end()) {
