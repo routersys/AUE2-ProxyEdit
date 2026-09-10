@@ -12,6 +12,15 @@ namespace {
 struct ImagingContext {
     IWICImagingFactory* factory = nullptr;
     bool ready = false;
+    bool owns_com = false;
+
+    ~ImagingContext() {
+        if (factory) {
+            factory->Release();
+            factory = nullptr;
+        }
+        if (owns_com) CoUninitialize();
+    }
 };
 
 thread_local ImagingContext t_imaging;
@@ -19,7 +28,8 @@ thread_local ImagingContext t_imaging;
 IWICImagingFactory* Imaging() {
     if (!t_imaging.ready) {
         t_imaging.ready = true;
-        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const HRESULT prepared = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        t_imaging.owns_com = SUCCEEDED(prepared);
         CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
                          IID_PPV_ARGS(&t_imaging.factory));
     }
