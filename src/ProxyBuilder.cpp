@@ -342,6 +342,7 @@ bool RegisterSource(const std::wstring& source, std::wstring& proxy_path) {
         job->header = job->writer.Header();
     }
     RefreshChunkState(job);
+    RememberSource(job->proxy, key.path);
 
     {
         std::lock_guard<std::mutex> lock(g_registry);

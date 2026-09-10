@@ -36,6 +36,9 @@ struct StoreItem {
 
 std::vector<StoreItem> StoreContents();
 
+void RememberSource(const std::wstring& proxy, const std::wstring& source);
+std::wstring RecallSource(const std::wstring& proxy);
+
 long long StoreUsage();
 void ReleaseCapacity(long long incoming, const std::wstring& keep);
 void RemoveProxy(const std::wstring& proxy_path);

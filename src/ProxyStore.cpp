@@ -3,6 +3,8 @@
 #include <shlwapi.h>
 
 #include <algorithm>
+#include <map>
+#include <mutex>
 
 #include "Log.h"
 #include "ProxyBuilder.h"
@@ -44,6 +46,87 @@ std::wstring BaseName(const std::wstring& path) {
     }
     if (cleaned.empty()) cleaned = L"source";
     return cleaned;
+}
+
+std::mutex g_index_lock;
+
+std::wstring IndexPathFor(const std::wstring& proxy) {
+    size_t separator = proxy.find_last_of(L"\\/");
+    if (separator == std::wstring::npos) return EffectiveStorePath() + L"\\sources.txt";
+    return proxy.substr(0, separator) + L"\\sources.txt";
+}
+
+std::string Utf8(const std::wstring& text) {
+    if (text.empty()) return std::string();
+    int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), (int)text.size(), nullptr, 0,
+                                     nullptr, nullptr);
+    std::string result((size_t)length, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), (int)text.size(), result.data(), length, nullptr,
+                        nullptr);
+    return result;
+}
+
+std::wstring Wide(const std::string& text) {
+    if (text.empty()) return std::wstring();
+    int length = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), nullptr, 0);
+    std::wstring result((size_t)length, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), result.data(), length);
+    return result;
+}
+
+std::map<std::wstring, std::wstring> ReadIndex(const std::wstring& path) {
+    std::map<std::wstring, std::wstring> table;
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return table;
+    LARGE_INTEGER size{};
+    std::string text;
+    if (GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart < 4 * 1024 * 1024) {
+        text.resize((size_t)size.QuadPart);
+        DWORD read = 0;
+        if (!ReadFile(file, text.data(), (DWORD)text.size(), &read, nullptr)) text.clear();
+        else text.resize(read);
+    }
+    CloseHandle(file);
+    size_t start = 0;
+    while (start < text.size()) {
+        size_t stop = text.find('\n', start);
+        if (stop == std::string::npos) stop = text.size();
+        std::string line = text.substr(start, stop - start);
+        start = stop + 1;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        size_t tab = line.find('\t');
+        if (tab == std::string::npos) continue;
+        table[Wide(line.substr(0, tab))] = Wide(line.substr(tab + 1));
+    }
+    return table;
+}
+
+void WriteIndex(const std::wstring& path,
+                const std::map<std::wstring, std::wstring>& table) {
+    std::string text;
+    for (const auto& entry : table) {
+        text += Utf8(entry.first);
+        text += '\t';
+        text += Utf8(entry.second);
+        text += "\r\n";
+    }
+    const std::wstring staging = path + L".new";
+    HANDLE file = CreateFileW(staging.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+    DWORD written = 0;
+    const bool stored = WriteFile(file, text.data(), (DWORD)text.size(), &written, nullptr) &&
+                        written == text.size();
+    CloseHandle(file);
+    if (!stored || !MoveFileExW(staging.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+        DeleteFileW(staging.c_str());
+    }
+}
+
+std::wstring IndexKey(const std::wstring& proxy) {
+    size_t separator = proxy.find_last_of(L"\\/");
+    return separator == std::wstring::npos ? proxy : proxy.substr(separator + 1);
 }
 
 std::vector<StoreEntry> CollectEntries() {
@@ -149,6 +232,27 @@ void ReleaseCapacity(long long incoming, const std::wstring& keep) {
             Say(L"容量を空けるためプロキシを破棄しました: %s", entry.path.c_str());
         }
     }
+}
+
+void RememberSource(const std::wstring& proxy, const std::wstring& source) {
+    if (proxy.empty() || source.empty()) return;
+    const std::wstring path = IndexPathFor(proxy);
+    std::lock_guard<std::mutex> lock(g_index_lock);
+    std::map<std::wstring, std::wstring> table = ReadIndex(path);
+    const std::wstring key = IndexKey(proxy);
+    auto found = table.find(key);
+    if (found != table.end() && found->second == source) return;
+    table[key] = source;
+    WriteIndex(path, table);
+}
+
+std::wstring RecallSource(const std::wstring& proxy) {
+    if (proxy.empty()) return std::wstring();
+    const std::wstring path = IndexPathFor(proxy);
+    std::lock_guard<std::mutex> lock(g_index_lock);
+    std::map<std::wstring, std::wstring> table = ReadIndex(path);
+    auto found = table.find(IndexKey(proxy));
+    return found == table.end() ? std::wstring() : found->second;
 }
 
 void RemoveProxy(const std::wstring& proxy_path) {
