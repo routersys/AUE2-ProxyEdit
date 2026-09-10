@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "Log.h"
+#include "ProxyBuilder.h"
 #include "ProxyFormat.h"
 #include "Settings.h"
 
@@ -142,6 +143,7 @@ void ReleaseCapacity(long long incoming, const std::wstring& keep) {
     for (const StoreEntry& entry : entries) {
         if (total + incoming <= capacity) break;
         if (_wcsicmp(entry.path.c_str(), keep.c_str()) == 0) continue;
+        if (ProxyInUse(entry.path)) continue;
         if (DeleteFileW(entry.path.c_str())) {
             total -= entry.size;
             Say(L"容量を空けるためプロキシを破棄しました: %s", entry.path.c_str());

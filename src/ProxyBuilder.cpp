@@ -392,6 +392,14 @@ bool SourceFailed(const std::wstring& source) {
     return found != g_jobs.end() && found->second->failed.load();
 }
 
+bool ProxyInUse(const std::wstring& proxy) {
+    std::lock_guard<std::mutex> lock(g_registry);
+    for (const auto& entry : g_jobs) {
+        if (_wcsicmp(entry.second->proxy.c_str(), proxy.c_str()) == 0) return true;
+    }
+    return false;
+}
+
 bool BuilderPaused() {
     return g_paused.load();
 }

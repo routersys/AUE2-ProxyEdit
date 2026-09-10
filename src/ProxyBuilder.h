@@ -53,6 +53,7 @@ void DiscardSource(const std::wstring& source);
 void SetBuilderPaused(bool paused);
 bool BuilderPaused();
 bool SourceFailed(const std::wstring& source);
+bool ProxyInUse(const std::wstring& proxy);
 
 std::vector<JobProgress> BuilderSnapshot();
 BuilderSummary BuilderState();
