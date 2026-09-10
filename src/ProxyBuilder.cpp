@@ -380,6 +380,12 @@ void SetBuilderPaused(bool paused) {
     PublishStateChange();
 }
 
+bool SourceFailed(const std::wstring& source) {
+    std::lock_guard<std::mutex> lock(g_registry);
+    auto found = g_jobs.find(Normalized(source));
+    return found != g_jobs.end() && found->second->failed.load();
+}
+
 bool BuilderPaused() {
     return g_paused.load();
 }

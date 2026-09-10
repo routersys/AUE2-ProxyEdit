@@ -41,6 +41,9 @@ enum RequestKind {
     kRequestRestore = 4,
 };
 
+std::mutex g_report_lock;
+std::vector<Unsupported> g_unsupported;
+
 void Post(int kind) {
     {
         std::lock_guard<std::mutex> lock(g_wake_lock);
@@ -161,7 +164,12 @@ void ScanWorker() {
         }
         if (taken & kRequestApply) {
             ScanResult result = ApplyProxies();
-            Say(L"プロキシへ差し替えました: 対象 %d 件、差し替え %d 件", result.eligible, result.swapped);
+            Say(L"プロキシへ差し替えました: 対象 %d 件、差し替え %d 件、対象外 %d 件", result.eligible,
+                result.swapped, result.rejected);
+            if (result.unsupported > 0) {
+                Warn(L"プロキシを作れない素材が %d 件あります。本体は読めますがこのプラグインの復号が対応していない形式です",
+                     result.unsupported);
+            }
             PublishStateChange();
         } else if ((taken & kRequestAutomatic) && CurrentSettings().enabled &&
                    !g_suspended.load()) {
@@ -170,6 +178,7 @@ void ScanWorker() {
                 Say(L"自動でプロキシへ差し替えました: %d 件", result.swapped);
             }
             PublishStateChange();
+            (void)result;
         }
     }
 }
@@ -212,6 +221,7 @@ ScanResult ApplyProxies() {
     SwapRequest request;
     std::map<std::wstring, std::wstring> resolved;
     std::set<std::wstring> already;
+    std::vector<Unsupported> unsupported;
     for (size_t index = 0; index < collected.objects.size(); index++) {
         const std::wstring& path = collected.files[index];
         result.examined++;
@@ -232,16 +242,25 @@ ScanResult ApplyProxies() {
             auto remembered = g_decisions.find(path);
             if (present && remembered != g_decisions.end() &&
                 remembered->second.size == key.size && remembered->second.time == key.time) {
-                resolved[path] = remembered->second.proxy;
-                if (!remembered->second.proxy.empty()) RegisterSource(path, resolved[path]);
+                std::wstring proxy = remembered->second.proxy;
+                if (!proxy.empty() && !RegisterSource(path, proxy)) {
+                    proxy.clear();
+                    if (!SourceFailed(path)) {
+                        unsupported.push_back({path, L"プロキシの生成に失敗しました"});
+                    }
+                }
+                resolved[path] = proxy;
                 cached = resolved.find(path);
             } else {
                 MediaQuery query;
                 query.path = path;
                 CallReadSection(&query, QueryMedia);
                 std::wstring proxy;
-                if (!query.ok || !Eligible(path, query.info) || !RegisterSource(path, proxy)) {
+                if (!query.ok || !Eligible(path, query.info)) {
                     proxy.clear();
+                } else if (!RegisterSource(path, proxy)) {
+                    proxy.clear();
+                    unsupported.push_back({path, L"この形式は読み込めないためプロキシを作れません"});
                 }
                 resolved[path] = proxy;
                 Decision decision;
@@ -255,6 +274,7 @@ ScanResult ApplyProxies() {
                 result.rejected++;
                 continue;
             }
+
         }
         if (cached->second.empty()) continue;
         result.eligible++;
@@ -265,6 +285,11 @@ ScanResult ApplyProxies() {
     if (!request.objects.empty()) {
         CallEditSection(&request, ApplySwap);
         result.swapped = request.applied;
+    }
+    result.unsupported = (int)unsupported.size();
+    {
+        std::lock_guard<std::mutex> lock(g_report_lock);
+        g_unsupported = unsupported;
     }
     g_scanning.store(false);
     return result;
@@ -299,6 +324,11 @@ ScanResult RestoreOriginals() {
 
 void RequestApply() {
     Post(kRequestApply);
+}
+
+std::vector<Unsupported> UnsupportedSources() {
+    std::lock_guard<std::mutex> lock(g_report_lock);
+    return g_unsupported;
 }
 
 int RestoreForExport() {

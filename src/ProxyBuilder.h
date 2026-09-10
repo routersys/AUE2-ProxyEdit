@@ -52,6 +52,7 @@ void RequestWholeSource(const std::wstring& source);
 void DiscardSource(const std::wstring& source);
 void SetBuilderPaused(bool paused);
 bool BuilderPaused();
+bool SourceFailed(const std::wstring& source);
 
 std::vector<JobProgress> BuilderSnapshot();
 BuilderSummary BuilderState();

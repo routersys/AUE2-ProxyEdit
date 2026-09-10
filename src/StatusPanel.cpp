@@ -38,6 +38,7 @@ HWND g_panel = nullptr;
 HFONT g_font = nullptr;
 std::vector<Button> g_buttons;
 std::vector<JobProgress> g_jobs;
+std::vector<Unsupported> g_unsupported;
 int g_scroll = 0;
 int g_max_scroll = 0;
 int g_hover = -1;
@@ -268,8 +269,9 @@ void Render(HWND window, HDC dc, const RECT& client) {
     g_row_pitch = row_height + Scaled(window, 4);
 
     g_jobs = BuilderSnapshot();
+    g_unsupported = UnsupportedSources();
     const int view_height = std::max((int)(client.bottom - header_bottom), 0);
-    const int content_height = (int)g_jobs.size() * g_row_pitch + padding;
+    const int content_height = (int)(g_jobs.size() + g_unsupported.size()) * g_row_pitch + padding;
     g_max_scroll = std::max(content_height - view_height, 0);
     g_scroll = std::clamp(g_scroll, 0, g_max_scroll);
 
@@ -330,7 +332,26 @@ void Render(HWND window, HDC dc, const RECT& client) {
         y = row.bottom + Scaled(window, 4);
     }
 
-    if (g_jobs.empty()) {
+    for (const Unsupported& item : g_unsupported) {
+        RECT row{client.left + padding, y, right_edge - padding, y + row_height};
+        if (row.bottom > header_bottom && row.top < client.bottom) {
+            FillRectangle(dc, row, ThemeColor("Grouping", RGB(0x38, 0x38, 0x38)));
+            RECT title{row.left + padding, row.top + Scaled(window, 2), row.right - padding,
+                       row.top + Scaled(window, 2) + line};
+            std::wstring name = ShortName(item.source);
+            SetTextColor(dc, ThemeColor("Text", RGB(0xFF, 0xFF, 0xFF)));
+            DrawTextW(dc, name.c_str(), -1, &title,
+                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_PATH_ELLIPSIS | DT_NOPREFIX);
+            RECT detail_area{row.left + padding, title.bottom, row.right - padding, title.bottom + line};
+            SetTextColor(dc, ThemeColor("LogWarn", RGB(0xFF, 0xFF, 0x7F)));
+            DrawTextW(dc, item.reason.c_str(), -1, &detail_area,
+                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+            SetTextColor(dc, ThemeColor("Text", RGB(0xFF, 0xFF, 0xFF)));
+        }
+        y = row.bottom + Scaled(window, 4);
+    }
+
+    if (g_jobs.empty() && g_unsupported.empty()) {
         RECT empty{client.left + padding, header_bottom + padding, right_edge - padding, client.bottom};
         SetTextColor(dc, ThemeColor("TextDisable", RGB(0x90, 0x90, 0x90)));
         DrawTextW(dc, L"対象の素材がありません。「プロキシへ」を押すと現在のシーンを調べます。", -1, &empty,

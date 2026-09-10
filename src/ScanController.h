@@ -15,6 +15,12 @@ struct ScanResult {
     int swapped = 0;
     int restored = 0;
     int rejected = 0;
+    int unsupported = 0;
+};
+
+struct Unsupported {
+    std::wstring source;
+    std::wstring reason;
 };
 
 void RegisterScanMenus(HOST_APP_TABLE* host);
@@ -22,6 +28,7 @@ void RequestApply();
 void RequestRestore();
 
 int RestoreForExport();
+std::vector<Unsupported> UnsupportedSources();
 void ApplyAfterExport();
 void SuspendAutomaticScan(bool suspend);
 bool AutomaticScanSuspended();
