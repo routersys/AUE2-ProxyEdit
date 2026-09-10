@@ -262,6 +262,8 @@ void RegisterScanMenus(HOST_APP_TABLE* host) {
     host->register_edit_menu(L"プロキシから元素材へ戻す", OnEditMenuRestore);
     host->register_event_listener(EVENT_TYPE::UPDATE_OBJECT, nullptr, OnHostEvent);
     host->register_event_listener(EVENT_TYPE::CHANGE_EDIT_SCENE, nullptr, OnHostEvent);
+    host->register_event_listener(EVENT_TYPE::CHANGE_EDIT_FRAME, nullptr, OnHostEvent);
+    host->register_event_listener(EVENT_TYPE::CHANGE_FOCUS_OBJECT, nullptr, OnHostEvent);
 }
 
 }
