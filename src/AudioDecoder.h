@@ -25,6 +25,8 @@ public:
     int Read(long long start, int length, void* buffer);
 
 private:
+    void CloseLocked();
+
     bool Seek(long long sample);
     bool Extend();
 

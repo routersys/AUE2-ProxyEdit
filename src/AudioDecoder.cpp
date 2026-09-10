@@ -34,12 +34,12 @@ bool AudioDecoder::Open(const std::wstring& path) {
 
     reader_->SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, FALSE);
     if (FAILED(reader_->SetStreamSelection(MF_SOURCE_READER_FIRST_AUDIO_STREAM, TRUE))) {
-        Close();
+        CloseLocked();
         return false;
     }
     IMFMediaType* wanted = nullptr;
     if (FAILED(MFCreateMediaType(&wanted))) {
-        Close();
+        CloseLocked();
         return false;
     }
     wanted->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
@@ -48,7 +48,7 @@ bool AudioDecoder::Open(const std::wstring& path) {
     result = reader_->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, wanted);
     wanted->Release();
     if (FAILED(result)) {
-        Close();
+        CloseLocked();
         return false;
     }
     IMFMediaType* current = nullptr;
@@ -61,7 +61,7 @@ bool AudioDecoder::Open(const std::wstring& path) {
         current->Release();
     }
     if (sample_rate_ <= 0 || channels_ <= 0) {
-        Close();
+        CloseLocked();
         return false;
     }
     PROPVARIANT duration;
@@ -78,8 +78,7 @@ bool AudioDecoder::Open(const std::wstring& path) {
     return true;
 }
 
-void AudioDecoder::Close() {
-    std::lock_guard<std::mutex> lock(mutex_);
+void AudioDecoder::CloseLocked() {
     if (reader_) {
         reader_->Release();
         reader_ = nullptr;
@@ -89,6 +88,11 @@ void AudioDecoder::Close() {
     sample_rate_ = 0;
     channels_ = 0;
     sample_count_ = 0;
+}
+
+void AudioDecoder::Close() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    CloseLocked();
 }
 
 bool AudioDecoder::IsOpen() const {
