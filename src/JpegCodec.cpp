@@ -73,98 +73,72 @@ bool DecodePlanar(IWICBitmapFrameDecode* frame, int proxy_width, int proxy_heigh
     return done;
 }
 
-bool DecodeThroughBgra(IWICImagingFactory* imaging, IWICBitmapFrameDecode* frame, int proxy_width,
-                       int proxy_height, unsigned char* destination, int width, int height, int stride,
-                       std::vector<unsigned char>& scratch) {
-    IWICBitmapSource* source = frame;
-    IWICBitmapScaler* scaler = nullptr;
-    UINT actual_width = 0, actual_height = 0;
-    frame->GetSize(&actual_width, &actual_height);
-    if ((int)actual_width != proxy_width || (int)actual_height != proxy_height) {
-        if (SUCCEEDED(imaging->CreateBitmapScaler(&scaler)) &&
-            SUCCEEDED(scaler->Initialize(frame, proxy_width, proxy_height,
-                                         WICBitmapInterpolationModeLinear))) {
-            source = scaler;
-        }
-    }
-    bool done = false;
-    IWICBitmapSource* converted = nullptr;
-    if (SUCCEEDED(WICConvertBitmapSource(GUID_WICPixelFormat32bppBGRA, source, &converted))) {
-        const int row = proxy_width * 4;
-        scratch.resize((size_t)row * proxy_height);
-        if (SUCCEEDED(converted->CopyPixels(nullptr, row, (UINT)scratch.size(), scratch.data()))) {
-            BgraToYuy2(scratch.data(), proxy_width, proxy_height, row, destination, width, height, stride);
-            done = true;
-        }
-        converted->Release();
-    }
-    if (scaler) scaler->Release();
-    return done;
 }
 
-}
-
-bool EncodeJpeg(const unsigned char* bgr, int width, int height, int out_width, int out_height,
-                int quality, std::vector<unsigned char>& out) {
+bool EncodeJpegPlanar(const unsigned char* luma, const unsigned char* blue, const unsigned char* red,
+                      int width, int height, int quality, std::vector<unsigned char>& out) {
     IWICImagingFactory* imaging = Imaging();
-    if (!imaging) return false;
-    IWICBitmap* bitmap = nullptr;
-    if (FAILED(imaging->CreateBitmapFromMemory(width, height, GUID_WICPixelFormat24bppBGR, width * 3,
-                                               (UINT)((size_t)width * height * 3), (BYTE*)bgr, &bitmap))) {
-        return false;
-    }
-    IWICBitmapSource* source = bitmap;
-    IWICBitmapScaler* scaler = nullptr;
-    if (out_width != width || out_height != height) {
-        if (SUCCEEDED(imaging->CreateBitmapScaler(&scaler)) &&
-            SUCCEEDED(scaler->Initialize(bitmap, out_width, out_height, WICBitmapInterpolationModeFant))) {
-            source = scaler;
-        }
-    }
+    if (!imaging || width <= 1 || height <= 0) return false;
+    const int chroma_width = width / 2;
     bool done = false;
     IStream* stream = nullptr;
-    if (SUCCEEDED(CreateStreamOnHGlobal(nullptr, TRUE, &stream))) {
-        IWICBitmapEncoder* encoder = nullptr;
-        if (SUCCEEDED(imaging->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder)) &&
-            SUCCEEDED(encoder->Initialize(stream, WICBitmapEncoderNoCache))) {
-            IWICBitmapFrameEncode* frame = nullptr;
-            IPropertyBag2* options = nullptr;
-            if (SUCCEEDED(encoder->CreateNewFrame(&frame, &options))) {
-                PROPBAG2 option{};
-                option.pstrName = (LPOLESTR)L"ImageQuality";
-                VARIANT value{};
-                value.vt = VT_R4;
-                value.fltVal = (float)quality / 100.0f;
-                options->Write(1, &option, &value);
-                if (SUCCEEDED(frame->Initialize(options)) &&
-                    SUCCEEDED(frame->SetSize(out_width, out_height))) {
-                    WICPixelFormatGUID format = GUID_WICPixelFormat24bppBGR;
-                    frame->SetPixelFormat(&format);
-                    if (SUCCEEDED(frame->WriteSource(source, nullptr)) && SUCCEEDED(frame->Commit()) &&
-                        SUCCEEDED(encoder->Commit())) {
-                        STATSTG status{};
-                        HGLOBAL memory = nullptr;
-                        if (SUCCEEDED(stream->Stat(&status, STATFLAG_NONAME)) &&
-                            SUCCEEDED(GetHGlobalFromStream(stream, &memory))) {
-                            SIZE_T used = (SIZE_T)status.cbSize.QuadPart;
-                            if (used > 0 && used <= GlobalSize(memory)) {
-                                void* address = GlobalLock(memory);
-                                out.assign((unsigned char*)address, (unsigned char*)address + used);
-                                GlobalUnlock(memory);
-                                done = true;
-                            }
+    if (FAILED(CreateStreamOnHGlobal(nullptr, TRUE, &stream))) return false;
+    IWICBitmapEncoder* encoder = nullptr;
+    if (SUCCEEDED(imaging->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder)) &&
+        SUCCEEDED(encoder->Initialize(stream, WICBitmapEncoderNoCache))) {
+        IWICBitmapFrameEncode* frame = nullptr;
+        IPropertyBag2* options = nullptr;
+        if (SUCCEEDED(encoder->CreateNewFrame(&frame, &options))) {
+            PROPBAG2 names[2]{};
+            VARIANT values[2]{};
+            names[0].pstrName = (LPOLESTR)L"ImageQuality";
+            values[0].vt = VT_R4;
+            values[0].fltVal = (float)quality / 100.0f;
+            names[1].pstrName = (LPOLESTR)L"JpegYCrCbSubsampling";
+            values[1].vt = VT_UI1;
+            values[1].bVal = (BYTE)WICJpegYCrCbSubsampling422;
+            options->Write(2, names, values);
+            IWICPlanarBitmapFrameEncode* planar = nullptr;
+            WICPixelFormatGUID format = GUID_WICPixelFormat24bppBGR;
+            if (SUCCEEDED(frame->Initialize(options)) && SUCCEEDED(frame->SetSize(width, height)) &&
+                SUCCEEDED(frame->SetPixelFormat(&format)) &&
+                SUCCEEDED(frame->QueryInterface(IID_PPV_ARGS(&planar)))) {
+                WICBitmapPlane planes[3]{};
+                planes[0].Format = GUID_WICPixelFormat8bppY;
+                planes[0].pbBuffer = (BYTE*)luma;
+                planes[0].cbStride = (UINT)width;
+                planes[0].cbBufferSize = (UINT)((size_t)width * height);
+                planes[1].Format = GUID_WICPixelFormat8bppCb;
+                planes[1].pbBuffer = (BYTE*)blue;
+                planes[1].cbStride = (UINT)chroma_width;
+                planes[1].cbBufferSize = (UINT)((size_t)chroma_width * height);
+                planes[2].Format = GUID_WICPixelFormat8bppCr;
+                planes[2].pbBuffer = (BYTE*)red;
+                planes[2].cbStride = (UINT)chroma_width;
+                planes[2].cbBufferSize = (UINT)((size_t)chroma_width * height);
+                if (SUCCEEDED(planar->WritePixels((UINT)height, planes, 3)) &&
+                    SUCCEEDED(frame->Commit()) && SUCCEEDED(encoder->Commit())) {
+                    STATSTG status{};
+                    HGLOBAL memory = nullptr;
+                    if (SUCCEEDED(stream->Stat(&status, STATFLAG_NONAME)) &&
+                        SUCCEEDED(GetHGlobalFromStream(stream, &memory))) {
+                        SIZE_T used = (SIZE_T)status.cbSize.QuadPart;
+                        if (used > 0 && used <= GlobalSize(memory)) {
+                            void* address = GlobalLock(memory);
+                            out.assign((unsigned char*)address, (unsigned char*)address + used);
+                            GlobalUnlock(memory);
+                            done = true;
                         }
                     }
                 }
-                if (options) options->Release();
-                if (frame) frame->Release();
             }
+            if (planar) planar->Release();
+            if (options) options->Release();
+            if (frame) frame->Release();
         }
-        if (encoder) encoder->Release();
-        stream->Release();
     }
-    if (scaler) scaler->Release();
-    bitmap->Release();
+    if (encoder) encoder->Release();
+    stream->Release();
     return done;
 }
 
@@ -184,10 +158,6 @@ bool DecodeJpegToYuy2(const unsigned char* data, size_t size, int proxy_width, i
                 thread_local std::vector<unsigned char> scratch;
                 done = DecodePlanar(frame, proxy_width, proxy_height, destination, width, height, stride,
                                     scratch);
-                if (!done) {
-                    done = DecodeThroughBgra(imaging, frame, proxy_width, proxy_height, destination, width,
-                                             height, stride, scratch);
-                }
                 frame->Release();
             }
             decoder->Release();

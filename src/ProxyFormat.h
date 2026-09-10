@@ -37,7 +37,7 @@ struct ProxyIndexEntry {
 #pragma pack(pop)
 
 extern const char kProxyMagic[8];
-const int kProxyVersion = 1;
+const int kProxyVersion = 2;
 
 bool ProxyHeaderIsValid(const ProxyHeader& header);
 long long ProxyIndexOffset(int frame);

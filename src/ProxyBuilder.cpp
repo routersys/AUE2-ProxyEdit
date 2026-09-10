@@ -154,7 +154,10 @@ void ProcessChunk(const JobPointer& job, int chunk) {
     const int end = std::min(begin + header.chunk_frames, header.frame_count);
     const int stride = header.source_width * 2;
     std::vector<unsigned char> picture((size_t)stride * header.source_height);
-    std::vector<unsigned char> reduced((size_t)header.proxy_width * header.proxy_height * 3);
+    const int chroma_width = header.proxy_width / 2;
+    std::vector<unsigned char> luma((size_t)header.proxy_width * header.proxy_height);
+    std::vector<unsigned char> blue((size_t)chroma_width * header.proxy_height);
+    std::vector<unsigned char> red((size_t)chroma_width * header.proxy_height);
     std::vector<unsigned char> encoded;
 
     auto started = std::chrono::steady_clock::now();
@@ -165,10 +168,11 @@ void ProcessChunk(const JobPointer& job, int chunk) {
             FailJob(job, L"復号できないフレームがありました");
             break;
         }
-        Yuy2ToBgrScaled(picture.data(), header.source_width, header.source_height, stride, reduced.data(),
-                        header.proxy_width, header.proxy_height);
-        if (!EncodeJpeg(reduced.data(), header.proxy_width, header.proxy_height, header.proxy_width,
-                        header.proxy_height, header.quality, encoded)) {
+        Yuy2ToPlanarScaled(picture.data(), header.source_width, header.source_height, stride,
+                           luma.data(), blue.data(), red.data(), header.proxy_width,
+                           header.proxy_height);
+        if (!EncodeJpegPlanar(luma.data(), blue.data(), red.data(), header.proxy_width,
+                              header.proxy_height, header.quality, encoded)) {
             FailJob(job, L"プロキシの符号化に失敗しました");
             break;
         }
