@@ -192,6 +192,11 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT message, WPARAM first, LPARAM se
             return 0;
         case WM_DESTROY:
             g_closed = true;
+            g_window = nullptr;
+            if (g_font) {
+                DeleteObject(g_font);
+                g_font = nullptr;
+            }
             return 0;
         default:
             break;
@@ -230,23 +235,7 @@ void OnConfigMenu(HWND owner, HINSTANCE) {
         SetWindowPos(g_window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
     }
     ShowWindow(g_window, SW_SHOW);
-    if (owner) EnableWindow(owner, FALSE);
-
-    MSG message;
-    while (!g_closed && GetMessageW(&message, nullptr, 0, 0)) {
-        if (IsDialogMessageW(g_window, &message)) continue;
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
-    }
-    if (owner) {
-        EnableWindow(owner, TRUE);
-        SetForegroundWindow(owner);
-    }
-    g_window = nullptr;
-    if (g_font) {
-        DeleteObject(g_font);
-        g_font = nullptr;
-    }
+    SetForegroundWindow(g_window);
 }
 
 }
