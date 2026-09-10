@@ -77,7 +77,6 @@ void LoadSettings() {
     Settings fallback;
     g_settings.enabled = ReadInt(L"Enabled", fallback.enabled ? 1 : 0) != 0;
     g_settings.target_min_width = ReadInt(L"TargetMinWidth", fallback.target_min_width);
-    g_settings.target_ten_bit = ReadInt(L"TargetTenBit", fallback.target_ten_bit ? 1 : 0) != 0;
     g_settings.target_min_mbps = ReadInt(L"TargetMinMbps", fallback.target_min_mbps);
     g_settings.scale_percent = std::clamp(ReadInt(L"ScalePercent", fallback.scale_percent), 20, 100);
     g_settings.quality = std::clamp(ReadInt(L"Quality", fallback.quality), 30, 98);
@@ -95,7 +94,6 @@ void StoreSettings(const Settings& settings) {
     g_loaded = true;
     WriteInt(L"Enabled", settings.enabled ? 1 : 0);
     WriteInt(L"TargetMinWidth", settings.target_min_width);
-    WriteInt(L"TargetTenBit", settings.target_ten_bit ? 1 : 0);
     WriteInt(L"TargetMinMbps", settings.target_min_mbps);
     WriteInt(L"ScalePercent", settings.scale_percent);
     WriteInt(L"Quality", settings.quality);

@@ -9,7 +9,6 @@ namespace pe {
 struct Settings {
     bool enabled = true;
     int target_min_width = 1921;
-    bool target_ten_bit = true;
     int target_min_mbps = 60;
     int scale_percent = 50;
     int quality = 80;
