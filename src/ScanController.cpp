@@ -31,6 +31,13 @@ std::thread g_worker;
 std::mutex g_wake_lock;
 std::condition_variable g_wake;
 
+struct Decision {
+    std::wstring proxy;
+    long long size = 0;
+    long long time = 0;
+};
+std::map<std::wstring, Decision> g_decisions;
+
 std::string ToUtf8(const std::wstring& text) {
     if (text.empty()) return std::string();
     int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), (int)text.size(), nullptr, 0, nullptr,
@@ -191,22 +198,34 @@ ScanResult ApplyProxies() {
 
         auto cached = resolved.find(path);
         if (cached == resolved.end()) {
-            MediaQuery query;
-            query.path = path;
-            CallReadSection(&query, QueryMedia);
-            if (!query.ok || !Eligible(path, query.info)) {
-                resolved[path] = std::wstring();
+            SourceKey key;
+            const bool present = QuerySource(path, key);
+            auto remembered = g_decisions.find(path);
+            if (present && remembered != g_decisions.end() &&
+                remembered->second.size == key.size && remembered->second.time == key.time) {
+                resolved[path] = remembered->second.proxy;
+                if (!remembered->second.proxy.empty()) RegisterSource(path, resolved[path]);
+                cached = resolved.find(path);
+            } else {
+                MediaQuery query;
+                query.path = path;
+                CallReadSection(&query, QueryMedia);
+                std::wstring proxy;
+                if (!query.ok || !Eligible(path, query.info) || !RegisterSource(path, proxy)) {
+                    proxy.clear();
+                }
+                resolved[path] = proxy;
+                Decision decision;
+                decision.proxy = proxy;
+                decision.size = key.size;
+                decision.time = key.time;
+                if (present) g_decisions[path] = decision;
+                cached = resolved.find(path);
+            }
+            if (cached->second.empty()) {
                 result.rejected++;
                 continue;
             }
-            std::wstring proxy;
-            if (!RegisterSource(path, proxy)) {
-                resolved[path] = std::wstring();
-                result.rejected++;
-                continue;
-            }
-            resolved[path] = proxy;
-            cached = resolved.find(path);
         }
         if (cached->second.empty()) continue;
         result.eligible++;
