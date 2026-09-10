@@ -46,9 +46,9 @@ EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
 EXTERN_C __declspec(dllexport) void UninitializePlugin() {
     StopExportGuard();
     StopNotifier();
-    DestroyStatusPanel();
     StopScanController();
     StopBuilder();
+    DestroyStatusPanel();
     ShutdownProxyInput();
     StopMediaFoundation();
 }
