@@ -25,12 +25,25 @@ std::atomic<int> g_waiting{0};
 std::atomic<int> g_passthrough{0};
 std::atomic<bool> g_restored{false};
 
-std::wstring WithoutMarker(const wchar_t* text) {
+std::wstring MenuLabel(const wchar_t* text) {
     std::wstring result;
     for (const wchar_t* cursor = text; cursor && *cursor; cursor++) {
+        if (*cursor == L'\t') break;
         if (*cursor != L'&') result.push_back(*cursor);
     }
+    const size_t size = result.size();
+    if (size >= 3 && result[size - 1] == L')' && result[size - 3] == L'(') result.erase(size - 3);
     return result;
+}
+
+std::wstring MenuName(const wchar_t* key) {
+    return MenuLabel(LanguageText(L"Menu", key));
+}
+
+std::wstring LabelAt(HMENU menu, int index) {
+    wchar_t label[256]{};
+    GetMenuStringW(menu, index, label, 256, MF_BYPOSITION);
+    return MenuLabel(label);
 }
 
 void CollectLeaves(HMENU menu, std::set<int>& into) {
@@ -51,9 +64,7 @@ bool FindOutputMenu(HMENU menu, const std::wstring& wanted, std::set<int>& into)
     for (int index = 0; index < count; index++) {
         HMENU sub = GetSubMenu(menu, index);
         if (!sub) continue;
-        wchar_t label[256]{};
-        GetMenuStringW(menu, index, label, 256, MF_BYPOSITION);
-        if (WithoutMarker(label) == wanted) {
+        if (LabelAt(menu, index) == wanted) {
             CollectLeaves(sub, into);
             return true;
         }
@@ -67,10 +78,7 @@ void CollectOutputCommands() {
     HMENU menu = GetMenu(g_host);
     if (!menu) return;
     g_collected = true;
-    const std::wstring wanted = WithoutMarker(LanguageText(L"Menu", L"ファイル出力(&U)"));
-    if (!FindOutputMenu(menu, wanted, g_output_commands)) {
-        FindOutputMenu(menu, WithoutMarker(L"ファイル出力(&U)"), g_output_commands);
-    }
+    FindOutputMenu(menu, MenuName(L"ファイル出力"), g_output_commands);
 }
 
 LRESULT CALLBACK GuardProc(HWND window, UINT message, WPARAM first, LPARAM second, UINT_PTR,
