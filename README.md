@@ -64,7 +64,7 @@
 2. AviUtl ExEdit2 を起動し、ダウンロードしたファイルをプレビュー画面へドロップします。
 3. 確認の画面で「このプラグイン・スクリプトを信頼して使用する」を選びます。
 
-手動で置く場合は `ProxyEdit_v1.0.0.zip` を展開し、`ProxyEdit.aux2` を `C:\ProgramData\aviutl2\Plugin\` へ入れてください。
+手動で置く場合は `ProxyEdit_v1.0.0.au2pkg.zip` を展開し、`ProxyEdit.aux2` を `C:\ProgramData\aviutl2\Plugin\` へ入れてください。
 
 ---
 
