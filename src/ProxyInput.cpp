@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
+#include <exception>
 #include <deque>
 #include <map>
 #include <memory>
@@ -124,7 +125,7 @@ void SessionWorker(Session* session) {
     }
 }
 
-INPUT_HANDLE OnOpen(LPCWSTR file) {
+INPUT_HANDLE OnOpenBody(LPCWSTR file) {
     ProxyReader probe;
     if (!probe.Open(file)) return nullptr;
     Session* session = new Session();
@@ -146,7 +147,7 @@ INPUT_HANDLE OnOpen(LPCWSTR file) {
     return (INPUT_HANDLE)session;
 }
 
-bool OnClose(INPUT_HANDLE handle) {
+bool OnCloseBody(INPUT_HANDLE handle) {
     Session* session = (Session*)handle;
     if (!session) return true;
     {
@@ -165,7 +166,7 @@ bool OnClose(INPUT_HANDLE handle) {
     return true;
 }
 
-bool OnInfoGet(INPUT_HANDLE handle, INPUT_INFO* info) {
+bool OnInfoGetBody(INPUT_HANDLE handle, INPUT_INFO* info) {
     Session* session = (Session*)handle;
     if (!session || !info) return false;
     session->format.biSize = sizeof(BITMAPINFOHEADER);
@@ -202,7 +203,7 @@ bool OnInfoGet(INPUT_HANDLE handle, INPUT_INFO* info) {
     return true;
 }
 
-int OnReadVideo(INPUT_HANDLE handle, int frame, void* buffer) {
+int OnReadVideoBody(INPUT_HANDLE handle, int frame, void* buffer) {
     Session* session = (Session*)handle;
     if (!session || !buffer) return 0;
     if (frame < 0) frame = 0;
@@ -250,10 +251,57 @@ int OnReadVideo(INPUT_HANDLE handle, int frame, void* buffer) {
     return (int)session->bytes;
 }
 
-int OnReadAudio(INPUT_HANDLE handle, int start, int length, void* buffer) {
+int OnReadAudioBody(INPUT_HANDLE handle, int start, int length, void* buffer) {
     Session* session = (Session*)handle;
     if (!session || !buffer || !session->has_audio) return 0;
     return session->audio.Read(start, length, buffer);
+}
+
+INPUT_HANDLE OnOpen(LPCWSTR file) {
+    try {
+        return OnOpenBody(file);
+    } catch (const std::exception& error) {
+        Warn(L"プロキシを開けませんでした: %S", error.what());
+    } catch (...) {
+        Warn(L"プロキシを開けませんでした");
+    }
+    return nullptr;
+}
+
+bool OnClose(INPUT_HANDLE handle) {
+    try {
+        return OnCloseBody(handle);
+    } catch (...) {
+        Warn(L"プロキシを閉じる途中で失敗しました");
+    }
+    return true;
+}
+
+bool OnInfoGet(INPUT_HANDLE handle, INPUT_INFO* info) {
+    try {
+        return OnInfoGetBody(handle, info);
+    } catch (...) {
+        Warn(L"プロキシの情報を取得できませんでした");
+    }
+    return false;
+}
+
+int OnReadVideo(INPUT_HANDLE handle, int frame, void* buffer) {
+    try {
+        return OnReadVideoBody(handle, frame, buffer);
+    } catch (...) {
+        Warn(L"プロキシの読み出しに失敗しました");
+    }
+    return 0;
+}
+
+int OnReadAudio(INPUT_HANDLE handle, int start, int length, void* buffer) {
+    try {
+        return OnReadAudioBody(handle, start, length, buffer);
+    } catch (...) {
+        Warn(L"プロキシの音声読み出しに失敗しました");
+    }
+    return 0;
 }
 
 INPUT_PLUGIN_TABLE g_table = {
