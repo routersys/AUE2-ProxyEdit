@@ -96,6 +96,7 @@ LRESULT CALLBACK GuardProc(HWND window, UINT message, WPARAM first, LPARAM secon
             }
             if (g_waiting.load() != 0) return 0;
             g_waiting.store(id);
+            BeginScanning();
             SuspendAutomaticScan(true);
             RequestExportRestore();
             return 0;

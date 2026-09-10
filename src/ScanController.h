@@ -32,6 +32,7 @@ void RequestDeleteProxies(const std::vector<std::wstring>& proxies);
 std::vector<Unsupported> UnsupportedSources();
 void SuspendAutomaticScan(bool suspend);
 bool AutomaticScanSuspended();
+void BeginScanning();
 bool IsProxyPath(const std::wstring& path);
 std::wstring SourceOfProxy(const std::wstring& path);
 void StartScanController();

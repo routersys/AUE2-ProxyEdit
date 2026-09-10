@@ -25,6 +25,7 @@ namespace {
 
 const wchar_t* kEffect = L"動画ファイル";
 const wchar_t* kItem = L"ファイル";
+std::atomic<bool> g_started{false};
 std::atomic<bool> g_suspended{false};
 std::atomic<int> g_pending{0};
 std::atomic<bool> g_stop{false};
@@ -300,7 +301,9 @@ void ScanWorker() {
         int taken = 0;
         {
             std::unique_lock<std::mutex> lock(g_wake_lock);
-            g_wake.wait(lock, [] { return g_stop.load() || g_pending.load() != 0; });
+            g_wake.wait(lock, [] {
+                return g_stop.load() || (g_started.load() && g_pending.load() != 0);
+            });
             if (g_stop.load()) return;
             taken = g_pending.exchange(0);
         }
@@ -366,6 +369,7 @@ void ScanWorker() {
 }
 
 void OnHostEvent(void*) {
+    BeginScanning();
     NoticeEditActivity();
     Post(kRequestAutomatic);
 }
@@ -408,6 +412,10 @@ void RequestDeleteProxies(const std::vector<std::wstring>& proxies) {
         for (const std::wstring& proxy : proxies) g_delete_list.push_back(proxy);
     }
     Post(kRequestDelete);
+}
+
+void BeginScanning() {
+    g_started.store(true);
 }
 
 void RequestRestoreProxy(const std::wstring& proxy) {
