@@ -26,12 +26,10 @@ struct Unsupported {
 void RegisterScanMenus(HOST_APP_TABLE* host);
 void RequestApply();
 void RequestRestore();
-
-int RestoreForExport();
 void RequestRestoreProxy(const std::wstring& proxy);
-int RestoreProxiesNow(const std::vector<std::wstring>& proxies);
+void RequestExportRestore();
+void RequestDeleteProxies(const std::vector<std::wstring>& proxies);
 std::vector<Unsupported> UnsupportedSources();
-void ApplyAfterExport();
 void SuspendAutomaticScan(bool suspend);
 bool AutomaticScanSuspended();
 bool IsProxyPath(const std::wstring& path);

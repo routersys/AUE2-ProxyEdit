@@ -8,5 +8,6 @@ void StartExportGuard();
 void StopExportGuard();
 
 void NoticeEditActivity();
+void ExportRestoreFinished(bool restored);
 
 }

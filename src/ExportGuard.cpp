@@ -2,6 +2,7 @@
 
 #include <commctrl.h>
 
+#include <atomic>
 #include <set>
 #include <string>
 
@@ -17,10 +18,12 @@ const UINT_PTR kSubclassId = 0x50450003;
 
 HWND g_host = nullptr;
 bool g_hooked = false;
+UINT g_ready_message = 0;
 std::set<int> g_output_commands;
 bool g_collected = false;
-bool g_restored = false;
-bool g_in_command = false;
+std::atomic<int> g_waiting{0};
+std::atomic<int> g_passthrough{0};
+std::atomic<bool> g_restored{false};
 
 std::wstring WithoutMarker(const wchar_t* text) {
     std::wstring result;
@@ -72,16 +75,30 @@ void CollectOutputCommands() {
 
 LRESULT CALLBACK GuardProc(HWND window, UINT message, WPARAM first, LPARAM second, UINT_PTR,
                            DWORD_PTR) {
+    if (g_ready_message != 0 && message == g_ready_message) {
+        const int id = g_waiting.exchange(0);
+        if (id != 0) {
+            g_passthrough.store(id);
+            PostMessageW(window, WM_COMMAND, (WPARAM)id, 0);
+        }
+        return 0;
+    }
     if (message == WM_COMMAND && second == 0 && HIWORD(first) <= 1) {
         CollectOutputCommands();
-        if (g_output_commands.count((int)LOWORD(first)) > 0 && !g_in_command) {
-            g_in_command = true;
+        const int id = (int)LOWORD(first);
+        if (g_output_commands.count(id) > 0) {
+            if (g_passthrough.load() == id) {
+                g_passthrough.store(0);
+                LRESULT result = DefSubclassProc(window, message, first, second);
+                SuspendAutomaticScan(false);
+                if (g_restored.exchange(false)) RequestApply();
+                return result;
+            }
+            if (g_waiting.load() != 0) return 0;
+            g_waiting.store(id);
             SuspendAutomaticScan(true);
-            g_restored = RestoreForExport() > 0;
-            LRESULT result = DefSubclassProc(window, message, first, second);
-            g_in_command = false;
-            NoticeEditActivity();
-            return result;
+            RequestExportRestore();
+            return 0;
         }
     }
     return DefSubclassProc(window, message, first, second);
@@ -93,6 +110,7 @@ void StartExportGuard() {
     if (g_hooked) return;
     g_host = HostWindow();
     if (!g_host) return;
+    g_ready_message = RegisterWindowMessageW(L"ProxyEditExportReady");
     g_hooked = SetWindowSubclass(g_host, GuardProc, kSubclassId, 0) != FALSE;
 }
 
@@ -103,15 +121,17 @@ void StopExportGuard() {
     g_host = nullptr;
 }
 
+void ExportRestoreFinished(bool restored) {
+    g_restored.store(restored);
+    if (g_host && g_ready_message != 0) PostMessageW(g_host, g_ready_message, 0, 0);
+}
+
 void NoticeEditActivity() {
-    if (g_in_command) return;
+    if (g_waiting.load() != 0 || g_passthrough.load() != 0) return;
     if (!AutomaticScanSuspended()) return;
     if (EditState() != EDIT_HANDLE::EDIT_STATE_EDIT) return;
     SuspendAutomaticScan(false);
-    if (g_restored) {
-        g_restored = false;
-        ApplyAfterExport();
-    }
+    if (g_restored.exchange(false)) RequestApply();
 }
 
 }

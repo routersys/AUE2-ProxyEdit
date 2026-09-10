@@ -9,7 +9,6 @@
 
 #include "FlatButton.h"
 #include "HostContext.h"
-#include "Log.h"
 #include "Notify.h"
 #include "ProxyBuilder.h"
 #include "ProxyStore.h"
@@ -188,20 +187,7 @@ void Erase(const std::vector<Row*>& targets) {
     std::vector<std::wstring> proxies;
     proxies.reserve(targets.size());
     for (const Row* row : targets) proxies.push_back(row->item.proxy);
-    RestoreProxiesNow(proxies);
-
-    int erased = 0;
-    for (const Row* row : targets) {
-        if (row->in_use && !row->item.source.empty()) {
-            DiscardSource(row->item.source);
-        } else {
-            RemoveProxy(row->item.proxy);
-        }
-        erased++;
-    }
-    Say(L"プロキシを削除しました: %d 件", erased);
-    PublishStateChange();
-    Refresh();
+    RequestDeleteProxies(proxies);
 }
 
 std::vector<Row*> Selected() {
