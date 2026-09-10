@@ -124,6 +124,9 @@ void StartExportGuard() {
     if (!g_host) return;
     g_ready_message = RegisterWindowMessageW(L"ProxyEditExportReady");
     g_hooked = SetWindowSubclass(g_host, GuardProc, kSubclassId, 0) != FALSE;
+    if (!g_hooked) {
+        Warn(L"出力と保存の監視を始められませんでした。出力と保存の前に元素材へ戻りません");
+    }
 }
 
 void StopExportGuard() {
