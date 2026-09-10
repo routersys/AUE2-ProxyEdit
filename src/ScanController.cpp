@@ -310,7 +310,7 @@ void ScanWorker() {
         if (taken & kRequestExportRestore) {
             ScanResult result = RestoreOriginals();
             if (result.restored > 0) {
-                Say(L"出力のため元素材へ戻しました: %d 件", result.restored);
+                Say(L"一時的に元素材へ戻しました: %d 件", result.restored);
             }
             PublishStateChange();
             ExportRestoreFinished(result.restored > 0);
