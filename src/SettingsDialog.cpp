@@ -1,6 +1,7 @@
 #include "SettingsDialog.h"
 
 #include <shellapi.h>
+#include <shlobj.h>
 
 #include <string>
 #include <vector>
@@ -27,6 +28,8 @@ enum ControlId {
     kIdWorkers,
     kIdCapacity,
     kIdStorePath,
+    kIdBrowse,
+    kIdStoreInfo,
     kIdOpenStore,
     kIdAccept,
     kIdCancel,
@@ -52,6 +55,81 @@ const Field kFields[] = {
 HWND g_window = nullptr;
 HFONT g_font = nullptr;
 bool g_closed = false;
+long long g_usage = 0;
+
+std::wstring SizeText(long long bytes) {
+    wchar_t buffer[64];
+    if (bytes >= 1024LL * 1024 * 1024) {
+        _snwprintf_s(buffer, _TRUNCATE, L"%.1f GB", (double)bytes / 1024.0 / 1024.0 / 1024.0);
+    } else {
+        _snwprintf_s(buffer, _TRUNCATE, L"%.0f MB", (double)bytes / 1024.0 / 1024.0);
+    }
+    return buffer;
+}
+
+bool PickFolder(HWND owner, std::wstring& selected) {
+    IFileDialog* dialog = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&dialog)))) {
+        return false;
+    }
+    bool picked = false;
+    DWORD options = 0;
+    if (SUCCEEDED(dialog->GetOptions(&options))) {
+        dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_PATHMUSTEXIST | FOS_FORCEFILESYSTEM);
+    }
+    dialog->SetTitle(L"プロキシの保存先");
+    if (!selected.empty()) {
+        IShellItem* start = nullptr;
+        if (SUCCEEDED(SHCreateItemFromParsingName(selected.c_str(), nullptr, IID_PPV_ARGS(&start)))) {
+            dialog->SetFolder(start);
+            start->Release();
+        }
+    }
+    if (SUCCEEDED(dialog->Show(owner))) {
+        IShellItem* result = nullptr;
+        if (SUCCEEDED(dialog->GetResult(&result)) && result) {
+            PWSTR name = nullptr;
+            if (SUCCEEDED(result->GetDisplayName(SIGDN_FILESYSPATH, &name)) && name) {
+                selected = name;
+                CoTaskMemFree(name);
+                picked = true;
+            }
+            result->Release();
+        }
+    }
+    dialog->Release();
+    return picked;
+}
+
+void UpdateStoreInfo(HWND window) {
+    wchar_t entered[MAX_PATH]{};
+    GetDlgItemTextW(window, kIdStorePath, entered, MAX_PATH);
+    std::wstring target = entered[0] ? std::wstring(entered) : DefaultStorePath();
+
+    ULARGE_INTEGER free_bytes{};
+    ULARGE_INTEGER total_bytes{};
+    std::wstring probe = target;
+    bool measured = false;
+    for (int guard = 0; guard < 16 && !probe.empty(); guard++) {
+        if (GetDiskFreeSpaceExW(probe.c_str(), &free_bytes, &total_bytes, nullptr)) {
+            measured = true;
+            break;
+        }
+        size_t separator = probe.find_last_of(L"\\/");
+        if (separator == std::wstring::npos || separator < 2) break;
+        probe = probe.substr(0, separator);
+    }
+
+    wchar_t line[256];
+    if (measured) {
+        _snwprintf_s(line, _TRUNCATE, L"空き %s　　使用量 %s", SizeText((long long)free_bytes.QuadPart).c_str(),
+                     SizeText(g_usage).c_str());
+    } else {
+        _snwprintf_s(line, _TRUNCATE, L"この場所の空き容量を取得できません");
+    }
+    SetDlgItemTextW(window, kIdStoreInfo, line);
+}
 
 int Scaled(HWND window, int value) {
     UINT dpi = GetDpiForWindow(window);
@@ -127,11 +205,18 @@ void Build(HWND window) {
     SetNumber(window, kIdWorkers, settings.worker_count);
     SetNumber(window, kIdCapacity, (int)(settings.capacity_bytes / (1024LL * 1024 * 1024)));
 
+    const int total_width = label_width + edit_width + suffix_width;
+    const int browse_width = Scaled(window, 72);
     MakeControl(window, L"STATIC", L"プロキシの保存先", SS_LEFT, margin, y + Scaled(window, 3),
-                label_width, height, 0);
-    HWND path = MakeControl(window, L"EDIT", EffectiveStorePath().c_str(), WS_BORDER, margin + label_width,
-                            y, edit_width + suffix_width, height, kIdStorePath);
-    (void)path;
+                total_width, height, 0);
+    y += Scaled(window, 20);
+    MakeControl(window, L"EDIT", EffectiveStorePath().c_str(), WS_BORDER | ES_AUTOHSCROLL, margin, y,
+                total_width - browse_width - Scaled(window, 6), height, kIdStorePath);
+    MakeControl(window, L"BUTTON", L"参照...", BS_PUSHBUTTON, margin + total_width - browse_width, y,
+                browse_width, height, kIdBrowse);
+    y += row;
+    MakeControl(window, L"STATIC", L"", SS_LEFT | SS_ENDELLIPSIS, margin, y, total_width, height,
+                kIdStoreInfo);
     y += row;
 
     const int button_width = Scaled(window, 96);
@@ -149,6 +234,8 @@ void Build(HWND window) {
     AdjustWindowRectEx(&client, (DWORD)GetWindowLongPtrW(window, GWL_STYLE), FALSE, 0);
     SetWindowPos(window, nullptr, 0, 0, client.right - client.left, client.bottom - client.top,
                  SWP_NOMOVE | SWP_NOZORDER);
+    g_usage = StoreUsage();
+    UpdateStoreInfo(window);
 }
 
 void Accept(HWND window) {
@@ -181,6 +268,16 @@ LRESULT CALLBACK SettingsProc(HWND window, UINT message, WPARAM first, LPARAM se
                 DestroyWindow(window);
             } else if (id == kIdCancel) {
                 DestroyWindow(window);
+            } else if (id == kIdBrowse) {
+                wchar_t current[MAX_PATH]{};
+                GetDlgItemTextW(window, kIdStorePath, current, MAX_PATH);
+                std::wstring selected = current[0] ? std::wstring(current) : EffectiveStorePath();
+                if (PickFolder(window, selected)) {
+                    SetDlgItemTextW(window, kIdStorePath, selected.c_str());
+                    UpdateStoreInfo(window);
+                }
+            } else if (id == kIdStorePath && HIWORD(first) == EN_CHANGE) {
+                UpdateStoreInfo(window);
             } else if (id == kIdOpenStore) {
                 EnsureStoreDirectory();
                 ShellExecuteW(window, L"open", EffectiveStorePath().c_str(), nullptr, nullptr, SW_SHOW);
