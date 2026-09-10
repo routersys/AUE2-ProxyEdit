@@ -374,6 +374,11 @@ void OnHostEvent(void*) {
     Post(kRequestAutomatic);
 }
 
+void OnProjectLoad(PROJECT_FILE*) {
+    BeginScanning();
+    Post(kRequestAutomatic);
+}
+
 void OnEditMenuApply(EDIT_SECTION*) {
     Post(kRequestApply);
 }
@@ -465,6 +470,7 @@ void RegisterScanMenus(HOST_APP_TABLE* host) {
     host->register_event_listener(EVENT_TYPE::CHANGE_EDIT_SCENE, nullptr, OnHostEvent);
     host->register_event_listener(EVENT_TYPE::CHANGE_EDIT_FRAME, nullptr, OnHostEvent);
     host->register_event_listener(EVENT_TYPE::CHANGE_FOCUS_OBJECT, nullptr, OnHostEvent);
+    host->register_project_load_handler(OnProjectLoad);
 }
 
 }
