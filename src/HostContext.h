@@ -28,6 +28,7 @@ bool Exporting();
 
 int LayoutSize(const char* key);
 COLORREF ThemeColor(const char* key, COLORREF fallback);
+FONT_INFO* HostFont(const char* key);
 const wchar_t* Translate(const wchar_t* text);
 
 bool CallEditSection(void* param, void (*proc)(void* param, EDIT_SECTION* edit));

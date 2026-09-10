@@ -51,6 +51,11 @@ COLORREF ThemeColor(const char* key, COLORREF fallback) {
     return RGB((code >> 16) & 0xFF, (code >> 8) & 0xFF, code & 0xFF);
 }
 
+FONT_INFO* HostFont(const char* key) {
+    if (!g_config) return nullptr;
+    return g_config->get_font_info(g_config, key);
+}
+
 const wchar_t* Translate(const wchar_t* text) {
     if (!g_config) return text;
     const wchar_t* translated = g_config->translate(g_config, text);
