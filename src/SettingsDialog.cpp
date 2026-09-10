@@ -209,15 +209,16 @@ void Build(HWND window) {
 
     const int total_width = label_width + edit_width + suffix_width;
     const int browse_width = FlatButtonWidth(window, g_font, L"参照...");
+    const int path_height = Scaled(window, 26);
     MakeControl(window, L"STATIC", L"プロキシの保存先", SS_LEFT, margin, y + Scaled(window, 3),
                 total_width, height, 0);
     y += Scaled(window, 20);
     MakeControl(window, L"EDIT", EffectiveStorePath().c_str(), WS_BORDER | ES_AUTOHSCROLL, margin, y,
-                total_width - browse_width - Scaled(window, 6), height, kIdStorePath);
+                total_width - browse_width - Scaled(window, 6), path_height, kIdStorePath);
     MakeFlatButton(window, L"参照...", kIdBrowse, g_font, false);
     SetWindowPos(GetDlgItem(window, kIdBrowse), nullptr, margin + total_width - browse_width, y,
-                 browse_width, height, SWP_NOZORDER);
-    y += row;
+                 browse_width, path_height, SWP_NOZORDER);
+    y += path_height + Scaled(window, 6);
     MakeControl(window, L"STATIC", L"", SS_LEFT | SS_ENDELLIPSIS, margin, y, total_width, height,
                 kIdStoreInfo);
     y += row;
