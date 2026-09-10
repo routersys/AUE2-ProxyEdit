@@ -5,24 +5,9 @@
 #include <cstdint>
 #include <vector>
 
-#include "cache2.h"
-
 namespace pe {
 
-enum PixelFormat {
-    kFormatHalfFloat = 10,
-    kFormatWide = 11,
-    kFormatYc48 = 13,
-    kFormatRgba = 28,
-    kFormatBgra = 87,
-    kFormatBgr = 88,
-    kFormatYuy2 = 107,
-};
-
 void InitColorTables();
-
-bool CacheImageToBgr(const CACHE_FILE_IMAGE& image, std::vector<unsigned char>& out, int& width,
-                     int& height);
 
 void BgraToYuy2(const unsigned char* source, int source_width, int source_height, int source_stride,
                 unsigned char* destination, int width, int height, int stride);

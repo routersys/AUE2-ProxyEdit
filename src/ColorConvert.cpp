@@ -1,6 +1,5 @@
 #include "ColorConvert.h"
 
-#include <math.h>
 #include <string.h>
 
 namespace pe {
@@ -20,14 +19,6 @@ inline unsigned char Clamp(int value) {
     if (value < 0) return 0;
     if (value > 255) return 255;
     return (unsigned char)value;
-}
-
-float HalfToFloat(unsigned short value) {
-    int exponent = (value >> 10) & 0x1F;
-    int mantissa = value & 0x3FF;
-    if (value & 0x8000) return 0.0f;
-    if (exponent == 0) return mantissa / 1024.0f / 16384.0f;
-    return (mantissa / 1024.0f + 1.0f) * powf(2.0f, (float)(exponent - 15));
 }
 
 std::vector<int> BuildColumnMap(int source_width, int width) {
@@ -64,90 +55,6 @@ void InitColorTables() {
         g_jpeg_red_red[index] = (int)(0.900627 * 256.0 * centered) + (128 << 8);
     }
     g_ready = true;
-}
-
-bool CacheImageToBgr(const CACHE_FILE_IMAGE& image, std::vector<unsigned char>& out, int& width,
-                     int& height) {
-    const unsigned char* source = (const unsigned char*)image.buffer;
-    if (!source || image.width <= 0 || image.height <= 0) return false;
-    width = image.width;
-    height = image.height;
-    const int pitch = image.pitch;
-    out.resize((size_t)width * height * 3);
-    const int format = (int)image.format;
-
-    if (format == kFormatBgr || format == kFormatBgra || format == kFormatRgba) {
-        const bool swapped = (format == kFormatRgba);
-        for (int y = 0; y < height; y++) {
-            const unsigned char* row = source + (size_t)y * pitch;
-            unsigned char* target = out.data() + (size_t)y * width * 3;
-            for (int x = 0; x < width; x++) {
-                unsigned char first = row[x * 4 + 0];
-                unsigned char middle = row[x * 4 + 1];
-                unsigned char last = row[x * 4 + 2];
-                target[x * 3 + 0] = swapped ? last : first;
-                target[x * 3 + 1] = middle;
-                target[x * 3 + 2] = swapped ? first : last;
-            }
-        }
-        return true;
-    }
-
-    if (format == kFormatWide) {
-        for (int y = 0; y < height; y++) {
-            const unsigned short* row = (const unsigned short*)(source + (size_t)y * pitch);
-            unsigned char* target = out.data() + (size_t)y * width * 3;
-            for (int x = 0; x < width; x++) {
-                target[x * 3 + 0] = (unsigned char)(row[x * 4 + 2] >> 8);
-                target[x * 3 + 1] = (unsigned char)(row[x * 4 + 1] >> 8);
-                target[x * 3 + 2] = (unsigned char)(row[x * 4 + 0] >> 8);
-            }
-        }
-        return true;
-    }
-
-    if (format == kFormatHalfFloat) {
-        for (int y = 0; y < height; y++) {
-            const unsigned short* row = (const unsigned short*)(source + (size_t)y * pitch);
-            unsigned char* target = out.data() + (size_t)y * width * 3;
-            for (int x = 0; x < width; x++) {
-                for (int channel = 0; channel < 3; channel++) {
-                    float value = HalfToFloat(row[x * 4 + (2 - channel)]);
-                    int scaled = (int)(value * 255.0f + 0.5f);
-                    target[x * 3 + channel] = (unsigned char)(scaled < 0 ? 0 : (scaled > 255 ? 255 : scaled));
-                }
-            }
-        }
-        return true;
-    }
-
-    if (format == kFormatYuy2) {
-        for (int y = 0; y < height; y++) {
-            const unsigned char* row = source + (size_t)y * pitch;
-            unsigned char* target = out.data() + (size_t)y * width * 3;
-            for (int x = 0; x + 1 < width; x += 2) {
-                double first = 1.1644 * (row[x * 2 + 0] - 16);
-                double blue = row[x * 2 + 1] - 128.0;
-                double second = 1.1644 * (row[x * 2 + 2] - 16);
-                double red = row[x * 2 + 3] - 128.0;
-                double to_red = 1.7927 * red;
-                double to_green = -0.2132 * blue - 0.5329 * red;
-                double to_blue = 2.1124 * blue;
-                auto clamp = [](double value) {
-                    return (unsigned char)(value < 0 ? 0 : (value > 255 ? 255 : value));
-                };
-                target[x * 3 + 0] = clamp(first + to_blue);
-                target[x * 3 + 1] = clamp(first + to_green);
-                target[x * 3 + 2] = clamp(first + to_red);
-                target[(x + 1) * 3 + 0] = clamp(second + to_blue);
-                target[(x + 1) * 3 + 1] = clamp(second + to_green);
-                target[(x + 1) * 3 + 2] = clamp(second + to_red);
-            }
-        }
-        return true;
-    }
-
-    return false;
 }
 
 void BgraToYuy2(const unsigned char* source, int source_width, int source_height, int source_stride,
