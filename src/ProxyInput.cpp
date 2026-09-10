@@ -63,6 +63,22 @@ struct Session {
 };
 
 std::atomic<int> g_sessions{0};
+std::set<Session*> g_live;
+std::mutex g_live_lock;
+
+void QuiesceSession(Session* session) {
+    {
+        std::lock_guard<std::mutex> lock(session->cache_lock);
+        session->stop = true;
+    }
+    session->wake.notify_all();
+    for (std::thread& worker : session->workers) {
+        if (worker.joinable()) worker.join();
+    }
+    session->reader.Close();
+    session->original.Close();
+    session->audio.Close();
+}
 
 bool DecodeProxyFrame(Session* session, int frame, unsigned char* destination) {
     std::vector<unsigned char> encoded;
@@ -143,6 +159,10 @@ INPUT_HANDLE OnOpenBody(LPCWSTR file) {
     for (int index = 0; index < count; index++) {
         session->workers.emplace_back(SessionWorker, session);
     }
+    {
+        std::lock_guard<std::mutex> lock(g_live_lock);
+        g_live.insert(session);
+    }
     g_sessions.fetch_add(1);
     return (INPUT_HANDLE)session;
 }
@@ -150,17 +170,11 @@ INPUT_HANDLE OnOpenBody(LPCWSTR file) {
 bool OnCloseBody(INPUT_HANDLE handle) {
     Session* session = (Session*)handle;
     if (!session) return true;
+    QuiesceSession(session);
     {
-        std::lock_guard<std::mutex> lock(session->cache_lock);
-        session->stop = true;
+        std::lock_guard<std::mutex> lock(g_live_lock);
+        g_live.erase(session);
     }
-    session->wake.notify_all();
-    for (std::thread& worker : session->workers) {
-        if (worker.joinable()) worker.join();
-    }
-    session->reader.Close();
-    session->original.Close();
-    session->audio.Close();
     delete session;
     g_sessions.fetch_sub(1);
     return true;
@@ -327,6 +341,12 @@ INPUT_PLUGIN_TABLE* ProxyInputTable() {
 }
 
 void ShutdownProxyInput() {
+    std::vector<Session*> sessions;
+    {
+        std::lock_guard<std::mutex> lock(g_live_lock);
+        sessions.assign(g_live.begin(), g_live.end());
+    }
+    for (Session* session : sessions) QuiesceSession(session);
 }
 
 }
