@@ -112,18 +112,22 @@ void CollectObjects(void* param, EDIT_SECTION* edit) {
 struct SwapRequest {
     std::vector<OBJECT_HANDLE> objects;
     std::vector<std::wstring> files;
+    size_t recoveries = 0;
     int applied = 0;
+    int recovered = 0;
 };
 
 void ApplySwap(void* param, EDIT_SECTION* edit) {
     SwapRequest* request = (SwapRequest*)param;
     for (size_t index = 0; index < request->objects.size(); index++) {
         std::string encoded = ToUtf8(request->files[index]);
-        if (edit->set_object_item_value(request->objects[index], kEffect, kItem, encoded.c_str())) {
-            request->applied++;
+        if (!edit->set_object_item_value(request->objects[index], kEffect, kItem, encoded.c_str())) {
+            continue;
         }
+        if (index < request->recoveries) request->recovered++;
+        else request->applied++;
     }
-    if (request->applied > 0) edit->set_edited_state();
+    if (request->applied > 0 || request->recovered > 0) edit->set_edited_state();
 }
 
 struct MediaQuery {
@@ -135,6 +139,17 @@ struct MediaQuery {
 void QueryMedia(void* param, EDIT_SECTION* edit) {
     MediaQuery* query = (MediaQuery*)param;
     query->ok = edit->get_media_info(query->path.c_str(), &query->info, sizeof(query->info));
+}
+
+struct ProxyState {
+    std::wstring source;
+    bool present = false;
+};
+
+bool ProxyExists(const std::wstring& path) {
+    if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) return true;
+    const DWORD reason = GetLastError();
+    return reason != ERROR_FILE_NOT_FOUND && reason != ERROR_PATH_NOT_FOUND;
 }
 
 bool Eligible(const std::wstring& path, const MEDIA_INFO& info) {
@@ -158,17 +173,33 @@ ScanResult ApplyProxies() {
     CallReadSection(&collected, CollectObjects);
 
     SwapRequest request;
+    SwapRequest recovery;
     std::map<std::wstring, std::wstring> resolved;
-    std::set<std::wstring> already;
+    std::map<std::wstring, ProxyState> proxies;
     std::vector<Unsupported> unsupported;
     for (size_t index = 0; index < collected.objects.size(); index++) {
         const std::wstring& path = collected.files[index];
         result.examined++;
         if (IsProxyPath(path)) {
-            if (already.insert(path).second) {
-                std::wstring source = SourceOfProxy(path);
-                std::wstring proxy;
-                if (!source.empty()) RegisterSource(source, proxy);
+            auto known = proxies.find(path);
+            if (known == proxies.end()) {
+                ProxyState state;
+                state.present = ProxyExists(path);
+                state.source = SourceOfProxy(path);
+                if (state.present && !state.source.empty()) {
+                    std::wstring proxy;
+                    RegisterSource(state.source, proxy);
+                }
+                known = proxies.emplace(path, state).first;
+            }
+            if (!known->second.present) {
+                if (known->second.source.empty()) {
+                    result.rejected++;
+                    continue;
+                }
+                recovery.objects.push_back(collected.objects[index]);
+                recovery.files.push_back(known->second.source);
+                continue;
             }
             result.eligible++;
             continue;
@@ -221,9 +252,16 @@ ScanResult ApplyProxies() {
         request.files.push_back(cached->second);
     }
 
+    if (!recovery.objects.empty()) {
+        request.recoveries = recovery.objects.size();
+        request.objects.insert(request.objects.begin(), recovery.objects.begin(),
+                               recovery.objects.end());
+        request.files.insert(request.files.begin(), recovery.files.begin(), recovery.files.end());
+    }
     if (!request.objects.empty()) {
         CallEditSection(&request, ApplySwap);
         result.swapped = request.applied;
+        result.restored = request.recovered;
     }
     result.unsupported = (int)unsupported.size();
     {
@@ -351,6 +389,9 @@ void ScanWorker() {
             ScanResult result = ApplyProxies();
             Say(L"プロキシへ差し替えました: 対象 %d 件、差し替え %d 件、対象外 %d 件", result.eligible,
                 result.swapped, result.rejected);
+            if (result.restored > 0) {
+                Warn(L"プロキシが見つからないので元素材へ戻しました: %d 件", result.restored);
+            }
             if (result.unsupported > 0) {
                 Warn(L"プロキシを作れない素材が %d 件あります。本体は読めますがこのプラグインの復号が対応していない形式です",
                      result.unsupported);
@@ -361,6 +402,9 @@ void ScanWorker() {
             ScanResult result = ApplyProxies();
             if (result.swapped > 0) {
                 Say(L"自動でプロキシへ差し替えました: %d 件", result.swapped);
+            }
+            if (result.restored > 0) {
+                Warn(L"プロキシが見つからないので元素材へ戻しました: %d 件", result.restored);
             }
             PublishStateChange();
             (void)result;
@@ -396,7 +440,7 @@ bool IsProxyPath(const std::wstring& path) {
 
 std::wstring SourceOfProxy(const std::wstring& path) {
     ProxyReader reader;
-    if (!reader.Open(path)) return std::wstring();
+    if (!reader.Open(path)) return RecallSource(path);
     std::wstring source = reader.Header().source_path;
     reader.Close();
     return source;
