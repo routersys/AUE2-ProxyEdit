@@ -7,6 +7,7 @@
 namespace pe {
 
 INPUT_PLUGIN_TABLE* ProxyInputTable();
+void StartProxyInput();
 void ShutdownProxyInput();
 
 }

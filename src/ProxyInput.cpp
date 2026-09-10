@@ -340,6 +340,15 @@ INPUT_PLUGIN_TABLE* ProxyInputTable() {
     return &g_table;
 }
 
+void StartProxyInput() {
+    HMODULE self = nullptr;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                           (LPCWSTR)&StartProxyInput, &self)) {
+        return;
+    }
+    Warn(L"自身の常駐に失敗しました。本体の終了時に落ちることがあります");
+}
+
 void ShutdownProxyInput() {
     std::vector<Session*> sessions;
     {

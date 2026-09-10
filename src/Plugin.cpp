@@ -33,6 +33,7 @@ EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
     SetHostWindow(Edit()->get_host_app_window());
     LoadSettings();
     StartMediaFoundation();
+    StartProxyInput();
     host->register_input_plugin(ProxyInputTable());
     RegisterScanMenus(host);
     RegisterSettingsMenu(host);
